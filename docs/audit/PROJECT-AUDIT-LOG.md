@@ -1255,3 +1255,16 @@
 - Validacao: 6/6 sondas OK, fixture com 2 falhas gerou 1 tarefa,
   `house docs --check` OK (18), `py_compile` limpo, `repo-integrity-check` OK.
 - ai-mesh `1e96bd0`; ningum servico foi reiniciado, nenhuma producao alterada.
+
+### 2026-11-20 — auto-wake: histerese do cap validada por fixture
+- Objetivo: confirmar que precisao <0.8 com cap 2 decide `REVERT_MAX_REMOTE_TO_1`
+  sem alterar o estado real do cap. Nenhum `--set-cap` foi chamado.
+- Metodo: fixture isolada redireciona `STATE`, `DB` (SQLite temporario) e
+  `CAP_STATE` do modulo `auto-improve` para diretorio temporario.
+- Resultado: precisao 0,3/cap 2 -> `REVERT_MAX_REMOTE_TO_1`; 0,9/cap 1 ->
+  `EXPAND_MAX_REMOTE_TO_2`; 0,3/cap 1 -> `KEEP_MAX_REMOTE_1`. O campo
+  `remote_cap` permaneceu 2 na decisao de revert (decisao nao escreve estado).
+- Prova de nao alteracao: sha256 do `~/.local/state/auto-improve-remote-cap.json`
+  identico antes e depois (`7fcf90abd6eb…`).
+- Fixture versionada em `ai-mesh/tests/test_auto_improve_hysteresis.py`;
+  `unittest` 1/1 OK no celular e no Linux. ai-mesh `687349d`.

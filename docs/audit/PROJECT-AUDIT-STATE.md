@@ -432,3 +432,8 @@ Estado MEDIDO agora:
   literais em 5 pontos viraram risco P2 em `TECHNICAL-DEBT.md`.
 - Nao rotacionar, nao reescrever historico, nao alterar config sem rebuild
   autorizado. Relatorio: `docs/audit/SECRETS-AUDIT-2026-11-20.md`.
+
+## Histerese do cap (20/11 — retomada)
+- Validada com fixture isolada: 0,3/cap2 -> REVERT, 0,9/cap1 -> EXPAND,
+  0,3/cap1 -> KEEP. Estado real do cap intacto (sha `7fcf90abd6eb…`).
+- Teste permanente: `ai-mesh/tests/test_auto_improve_hysteresis.py` (1/1 nos 2 hosts).
