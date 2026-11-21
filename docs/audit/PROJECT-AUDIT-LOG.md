@@ -1405,3 +1405,13 @@
 - Decisão registrada: não adotar em RAG agora; reavaliar com QAT local ou se
   rescore precisar ser desligado. Scripts `littlebit2-itq-probe.py` e
   `itq-binary-rag-ab.py`; doc `LITTLEBIT2-RESEARCH-2026-11-21.md`.
+
+### 2026-11-21 — auto-wake: erro de relevância do RAG investigado
+- Causa raiz: pool final do RRF é `top_k*4` (32 para k=8) e o chunk correto
+  fica em ~rank 95; além disso o boost atual premia `code`/`indexer` no nome
+  de `codebase_indexer.py`, não o conteúdo de `rag.py`.
+- A/B em `jarvis_test_relevance` (2250 pontos; 14 queries): pool 4×+boost
+  atual 0,857; pool 20×+boost de resposta 0,929 com alvo no rank 4 e latência
+  35,8 → 34,8 ms/query. MRR cai 0,821 → 0,804.
+- Nada aplicado em produção; `code_index` 275.724 inalterado. Decisão e
+  scripts em `docs/audit/RAG-RELEVANCE-BOOST-2026-11-21.md`.
