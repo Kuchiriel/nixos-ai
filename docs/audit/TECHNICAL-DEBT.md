@@ -39,6 +39,12 @@ dívida; P3 estética. Impacto real, não quantidade de arquivos.
   rebuild autorizado. Nenhum token real encontrado no HEAD, no histórico ou nos
   32 generations do Store.
 
+- **28 worktrees `ai-mesh-sync-*` no celular (~2,4 GB)**: 27 são checkouts
+  antigos com tree divergente do `main`; nenhum tem arquivo ausente no canônico
+  nem linha de memória não preservada. Não apagar sem decisão do dono — inventário
+  completo em `ai-mesh/docs/ai-mesh-sync-worktrees-2026-11-20.json` (`d7a7cee`).
+  Se o dono autorizar, usar `phone-fs propose` + manifesto antes de qualquer limpeza.
+
 ## P3 — baixo
 - Worktree `/tmp/ack-patch-wt` prunable.
 - Nomes com variação de caixa no Vault (não duplicatas; 570 hashes únicos).

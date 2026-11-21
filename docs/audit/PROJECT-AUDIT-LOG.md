@@ -1268,3 +1268,17 @@
   identico antes e depois (`7fcf90abd6eb…`).
 - Fixture versionada em `ai-mesh/tests/test_auto_improve_hysteresis.py`;
   `unittest` 1/1 OK no celular e no Linux. ai-mesh `687349d`.
+
+### 2026-11-20 — auto-wake: worktrees ai-mesh-sync inventariados
+- Pedido citava 27; medimos **28** (o extra é o snapshot `db88bfbb9ece-1795224116`
+  criado nesta janela). Todos no celular; Linux tem 0.
+- 28/28 registrados no Git, 0 sujos, 0 arquivos com caminho ausente no canônico,
+  12 HEADs distintos, 1 ancestral de `main`, 27 divergentes (histórico antigo sem
+  ancestral comum — provável reset de histórico).
+- 75 blobs com bytes distintos (4,2 MB) e 417 linhas únicas em 34 arquivos —
+  mas todos os 34 caminhos existem no canônico e os snapshots de
+  `memory/episodic/termux.jsonl` são subconjuntos do stream atual.
+- Decisão: **nada a consolidar por movimentação**; o manifesto único
+  `ai-mesh/docs/ai-mesh-sync-worktrees-2026-11-20.json` é a consolidação legível.
+  Nada apagado nem movido. Risco de disco ~2,4 GB registrado em `TECHNICAL-DEBT.md`
+  para decisão do dono (`phone-fs propose` + manifesto se autorizado).
