@@ -937,6 +937,7 @@ async function handler(req, res) {
       debt: join(HOME, 'projects/nixos-ai/docs/audit/TECHNICAL-DEBT.md'),
       state: join(HOME, 'projects/nixos-ai/docs/audit/PROJECT-AUDIT-STATE.md'),
       gaps: join(HOME, "projects/ai-mesh/docs/auto-improve-gaps.jsonl"),
+      resolution: join(HOME, "projects/ai-mesh/docs/auto-improve-resolution.json"),
       backlog: join(HOME, 'projects/nixos-ai/docs/backlog.jsonl'),
     };
   }
@@ -961,10 +962,23 @@ async function handler(req, res) {
         .filter(Boolean);
       const next = stateRaw.split(/\r?\n/).filter(l => /^\d+\. /.test(l)).slice(0, 5)
         .map(l => ({ kind: 'next', text: l.replace(/^\d+\. /, '').slice(0, 240) }));
-      const result = { items: openItems.concat(gaps, next),
-        counts: { debt: openItems.length, gaps: gaps.length, next: next.length },
+      // Fonte unica e versionada: o snapshot publicado pelo auto-improve no
+      // repo ai-mesh. Nao ha estado proprio do hub nem segundo arquivo local.
+      let resolution = null;
+      try {
+        const r = JSON.parse(readFileSync(fonts.resolution, 'utf8'));
+        resolution = { kind: 'resolution', arquivadas: Number(r.arquivadas || 0),
+          pendentes: Number(r.pendentes_de_fechamento || 0),
+          ts: r.ts || '', fonte: r.source || '' };
+      } catch (e) { resolution = { kind: 'resolution', indisponivel: true }; }
+      const result = { items: openItems.concat(gaps, next, resolution ? [resolution] : []),
+        counts: { debt: openItems.length, gaps: gaps.length, next: next.length,
+                  resolution_arquivadas: resolution?.arquivadas ?? null,
+                  resolution_pendentes: resolution?.pendentes ?? null },
+        resolution,
         sources: ['docs/audit/TECHNICAL-DEBT.md', 'docs/audit/PROJECT-AUDIT-STATE.md',
-                  'ai-mesh/docs/auto-improve-gaps.jsonl'],
+                  'ai-mesh/docs/auto-improve-gaps.jsonl',
+                  'ai-mesh/docs/auto-improve-resolution.json'],
         state_url: '/api/pending?name=PROJECT-AUDIT-STATE.md',
         documentation: 'docs/audit/PROJECT-AUDIT-STATE.md' };
       const body = JSON.stringify(result);

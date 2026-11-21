@@ -1427,3 +1427,13 @@
 - Decisão: não adotar `--use_itq` sem reproduzir 5 épocas + destilação em GPU.
 - Serviços devolvidos (residente, whisper, hub 200, opencode vivo, staged=0).
   Detalhe: `docs/audit/LITTLEBIT2-QAT-COMPRESSION-2026-11-21.md`.
+
+### 2026-11-21 — auto-wake: resolução do auto-improve no painel /hub
+- Fonte única versionada: `auto-improve --snapshot` publica
+  `ai-mesh/docs/auto-improve-resolution.json` (arquivadas/pendentes/ts/fonte).
+- `/api/pending` reaproveita a rota existente e expõe `resolution` e
+  `counts.resolution_*`, sem criar estado próprio no hub.
+- Bug corrigido: chave `resolution` faltava em `pendingFiles()` e a rota
+  devolvia `indisponivel`; após correção, 23 arquivadas / 0 pendentes.
+- Prova: `/hub/api/pending` 200 via IPv6, 42 itens, 0 segredos; `node --check`
+  limpo; só agent-hub.service reiniciado. ai-mesh `b9483c3`.
