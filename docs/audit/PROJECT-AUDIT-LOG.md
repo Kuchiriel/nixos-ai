@@ -1521,3 +1521,8 @@
   produção 275.724 atualizados em 1259 grupos; 0 pontos com commit da migracao.
 - Recall@8 1,0, latencia 1,71ms; `?wait=true` necessario no payload update.
   Doc `docs/audit/CODE-INDEX-REAL-PROVENANCE-2026-11-21.md`.
+
+### 2026-11-21 — push protection resolvido (d0012=Unblock)
+- 11 bypasses criados pela API oficial, sem expor valores e sem reescrever
+  histórico; push rc=0 com LOCAL=REMOTE=f0ef2576 e divergencia 0.
+- Risco residual: chaves antigas seguem no historico; rotacao pendente.
