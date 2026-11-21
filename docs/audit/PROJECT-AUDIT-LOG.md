@@ -1456,3 +1456,11 @@
 - Decisao: compressao e real e de alto impacto, mas adocao exige GPU >=16 GB
   para QAT completo e kernel bitwise; nada alterado em producao.
   Doc `docs/audit/LITTLEBIT2-COMPRESSION-FINAL-2026-11-21.md`.
+
+### 2026-11-21 — Kaggle T4x2: A/B completo do LittleBit-2
+- Kernel COMPLETE: 300 passos, residual+professor, Qwen3-0.6B. Baseline PPL
+  1803,64 vs ITQ 2424,87; ITQ teve loss inicial 280→210 e final 74→69.
+- Mecanismo do paper confirmado (melhor init/convergência), mas PPL ainda
+  pior com 300 passos — protocolo exige 5 épocas. Custo init 8,5× maior.
+- Pico 10031 MiB, nenhum modelo de producao alterado.
+- Doc: `docs/audit/LITTLEBIT2-KAGGLE-QAT-2026-11-21.md`.
