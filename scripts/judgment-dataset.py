@@ -82,12 +82,23 @@ def split_context(context):
 
 
 def to_laya(row):
-    """Uma label -> um item do formato do Laya."""
+    """Uma label -> um item do formato do Laya.
+
+    (21/11) O `state` carrega o RACIOCINIO DO DONO (o `why_dono`), nao so o
+    texto. Sem isso o adapter aprende o rotulo e nao a decisao: treinar assim
+    e' o mesmo que treinar no gabarito, que e' o reward hacking por rubric
+    que o acervo mede (arXiv 2607.28802). E o gabarito (o `key`) e' o
+    porque DE QUEM ESCREVEU o item — nenhum dos dois entra no state, senao o
+    modelo aprenderia a copiar a resposta da casa.
+    """
     answer = str(row.get("answer", "")).strip()
     key = LEVEL_TO_KEY.get(answer)
     if key is None:
         return None
     state = split_context(row.get("context", ""))
+    why = str(row.get("why_dono") or "").strip()
+    if why:
+        state = f"{state}\nThe owner's reason: {why}"
     return {"type": "choice",
             "state": state,
             "question": QUESTION,
