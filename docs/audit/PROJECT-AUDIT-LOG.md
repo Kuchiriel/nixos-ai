@@ -1507,3 +1507,9 @@
   /var/backups/quarentena-litellm-20261121/ com manifesto e sha conferido.
 - Pos-movimento: 35 exports no segredo e no keys.env, hub 200, opencode-serve
   active, 0 referencias antigas na geracao.
+
+### 2026-11-21 — risco P0: push bloqueado por segredos em histórico antigo
+- GitHub Push Protection rejeitou push por Resend API Keys em commits antigos
+  (`f49d66a`, `f7eb040`) dentro de `docs/sessions/*.md`.
+- Commit atual `b4905899` nao contem marcadores; nada reescrito, nenhum
+  unblock usado. Aguardando decisao do dono (unblock vs reescrita).

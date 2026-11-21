@@ -23,3 +23,12 @@ aplicado com `nixos-rebuild switch` rc=0.
 - `keys-wrapper.sh` aponta para o segredo sops.
 - Hub `/api/state` 200, `opencode-serve.service` active, 4 processos opencode.
 - Nenhuma referência a `/etc/litellm.env` na nova geração do NixOS.
+
+## Bloqueio de push (fora do escopo desta mudança)
+
+O push de `b4905899` foi rejeitado pelo GitHub Push Protection: há **Resend
+API Keys** em commits antigos (`f49d66a`, `f7eb040`), em
+`docs/sessions/ses_f3151b…md` e `ses_f0d36…md`. São 6 detecções em histórico
+prévio — o diff do commit `b4905899` tem **0** marcadores `re_…`/`sk-…`.
+Não reescrevi histórico nem usei o link de unblock (§10.4): isso exige
+decisão do dono. Commit permanece local até a intervenção.
