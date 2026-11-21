@@ -1708,7 +1708,12 @@ def _cmd_execute(args: argparse.Namespace) -> int:
 
 def _cmd_workitem(args: argparse.Namespace) -> int:
     """Task queue management (replaces old workitem)."""
-    from nightwatch.task_queue import TaskQueue, Task, TaskStatus
+    from nightwatch.task_queue import (
+        VALID_TRANSITIONS,
+        Task,
+        TaskQueue,
+        TaskStatus,
+    )
 
     queue = TaskQueue(project=args.project)
 
@@ -1723,6 +1728,42 @@ def _cmd_workitem(args: argparse.Namespace) -> int:
         )
         queue.add_task(task)
         print(f"Created task {task.id}: {title}")
+    elif args.transition:
+        task_id, new_status = args.transition
+        valid_statuses = {status.value for status in TaskStatus}
+        if new_status not in valid_statuses:
+            print(
+                f"Invalid status {new_status!r}; expected one of: "
+                f"{', '.join(sorted(valid_statuses))}",
+                file=sys.stderr,
+            )
+            return 1
+
+        task = queue.get_task(task_id)
+        if task is None:
+            print(f"Task not found: {task_id}", file=sys.stderr)
+            return 1
+
+        old_status = task.status
+        if old_status != new_status and new_status not in VALID_TRANSITIONS.get(
+            old_status, set()
+        ):
+            print(
+                f"Invalid transition: {old_status} -> {new_status} "
+                f"(task={task_id})",
+                file=sys.stderr,
+            )
+            return 1
+
+        queue.update_task(task_id, status=new_status)
+        updated = queue.get_task(task_id)
+        if updated is None or updated.status != new_status:
+            print(
+                f"Transition failed: {task_id} remained {old_status}",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"Task {task_id}: {old_status} -> {new_status}")
     elif args.list:
         tasks = queue._tasks
         for t in tasks:
