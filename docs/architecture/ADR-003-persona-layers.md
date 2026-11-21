@@ -1,7 +1,8 @@
 ---
 title: "ADR-003: Persona Layers — Identidade, Execução e Modos REPL"
-status: proposed
-status_note: BLOCKED — decisão de produto pendente, evidência técnica completa
+status: superseded
+superseded_by: ADR-005-agent-runtime-kernel
+status_note: BLOCKED pela decisão de produto; alvo `agent_loop.py` foi arquivado como código morto (88c34f68) e a convergência real passou a ser `jarvis/runtime/AgentRuntime` (ADR-005, ACCEPTED). Evidência técnica desta ADR permanece válida.
 layer: architecture
 related:
   - architecture/ADR-001-agent-platform

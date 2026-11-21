@@ -1539,3 +1539,11 @@
   (sem hash fixo) e preserva o LD_LIBRARY_PATH atual.
 - Probe real: torch 2.6.0+cu124, transformers 4.51.3, cuda true, ok true;
   testes do preflight 5/5.
+
+### 2026-11-21 — auditoria dev.py × agent_loop.py (ADR-003)
+- Medido: dev.py 4205 linhas/71 defs; agent_loop.py 602 linhas/3 classes e
+  arquivado em 88c34f68; ADR-005 (ACCEPTED) define AgentRuntime como canonico.
+- Veredito: nao convergir para agent_loop.py (regressao); convergir para
+  AgentRuntime via F8 com linter estrutural 3->2->1 loops (31/31 testes hoje).
+- ADR-003 marcada superseded por ADR-005, texto preservado; nenhuma linha de
+  dev.py alterada. Detalhe em docs/audit/DEV-AGENT-LOOP-AUDIT-2026-11-21.md.
