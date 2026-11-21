@@ -1311,3 +1311,20 @@
 - Validacao: `state-audit --json` passou de **3 orfaos para 0**, com 15 arquivos
   MANTIDOS (4 sidecars do auto-improve). Nada quarentenado, nada apagado,
   nenhum servico reiniciado. ai-mesh `43568dd`; lição em ARMADILHAS.
+
+### 2026-11-21 — retomada: contrato Windows e auditor de paridade
+- Retomada segundo o protocolo: HEAD `004d372b`, STATE/LOG lidos, worktree
+  `coord-mcp` do Onca intacto, mudancas alheias na arvore preservadas.
+- Gap: Windows so tinha manifests auto-descobertos; nao havia contrato canonico
+  nem visao de paridade entre hosts. Meu primeiro diagnostico ("IP nulo") estava
+  errado — o campo correto e `discovered_ips`; nada foi consertado nesse ponto.
+- Entregas: `ai-mesh/manifests/windows.json` (capacidades medidas, lacunas e
+  requisitos de paridade — nada ativado), `shared/scripts/fleet-parity`
+  (read-only, sem IPs/segredos) e entrada `windows-contract` do house com
+  entrypoints via bus e health pelo auditor.
+- Paridade medida: linux shell+mcp, termux shell, windows 2 peers com SMB:445
+  e sem SSH/MCP. A2A cards: linux 1, termux 1, windows 2.
+- Bug de portabilidade corrigido na origem: repo derivado de `__file__` e uniao
+  entre estado vivo e manifests descobertos (o Linux nao via os peers Windows
+  descobertos pelo celular). `unittest` 3/3 nos dois hosts; `house docs --check`
+  OK (18). ai-mesh `87656fb`/`d406a37`.

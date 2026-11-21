@@ -437,3 +437,9 @@ Estado MEDIDO agora:
 - Validada com fixture isolada: 0,3/cap2 -> REVERT, 0,9/cap1 -> EXPAND,
   0,3/cap1 -> KEEP. Estado real do cap intacto (sha `7fcf90abd6eb…`).
 - Teste permanente: `ai-mesh/tests/test_auto_improve_hysteresis.py` (1/1 nos 2 hosts).
+
+## Contratos de frota (21/11 — retomada)
+- Windows tem contrato canonico (`manifests/windows.json`) com lacunas declaradas;
+  `fleet-parity` mede capacidades por host sem IPs/segredos (3/3 testes nos 2 hosts).
+- Nao ativar SSH/MCP em peer Windows sem decao do dono do peer.
+- Proximo: usar `fleet-parity --json` como fonte de gaps do auto-improve.
