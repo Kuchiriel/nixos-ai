@@ -651,3 +651,21 @@ Estado MEDIDO agora:
 - 570 notas, repo do vault limpo, 102 pontos/34 paths indexados, 0 orfãos;
   fronteira Vault≠RAG confirmada. Nenhuma ação de escrita tomada.
 - HEAD final desta janela: 54279a45 (após docs de context engineering).
+
+## 22/11 — kernel oficial v3 ERROR, causa medida, v4 RUNNING
+
+- v3 terminou `KernelWorkerStatus.ERROR` às 23:39Z. Log baixado para
+  `~/work/littlebit2/official-error-20261122/` (400 KB). Causa EXATA:
+  `prepare_repository()` chamava `git rev-parse HEAD` sem `capture=True`;
+  o hash pinado aparecia no log, mas `run()` devolvia string vazia e o
+  código abortava com `official commit mismatch:  != 42d658b0...`.
+  Mesma classe do bug do `nvidia-smi` corrigido antes (#15) — agora com
+  teste de regressão que reproduz o comportamento de stdout não capturado.
+- Correção commitada em `81775c68` (script + teste, contrato 7/7).
+- `kaggle kernels push -p benchmarks/littlebit2/kaggle-official` →
+  **version 4 successfully pushed**; status medido logo depois:
+  **KernelWorkerStatus.RUNNING**.
+- Gap `gap-littlebit2-full-qat-b4` segue ABERTO: ainda é preciso COMPLETE,
+  download de output e `littlebit2-validate --strict` com 7/7.
+- Lição: logs de erro do Kaggle são JSONL com campo `data` (o validador
+  `littlebit2-validate` já decodifica); nada foi apagado do job anterior.

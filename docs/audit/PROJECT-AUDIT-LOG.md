@@ -1636,3 +1636,8 @@
 - 570 notas / git limpo / 102 pontos Qdrant em 34 paths existentes.
 - Registrado como nao-problema em KNOWLEDGE-SYSTEM-AUDIT.md secao 6.
 - Nenhuma nota alterada; nenhuma colecao escrita.
+
+### 2026-11-22 — kernel v3 ERROR → v4 RUNNING
+- HEAD apos fix: 81775c68. Causa: rev-parse sem capture=True (stdout lost).
+- Teste de regressao adicionado; contrato 7/7.
+- v4 pushed e RUNNING; gap ainda aberto ate COMPLETE + validacao 7/7.
