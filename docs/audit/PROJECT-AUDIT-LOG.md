@@ -1631,3 +1631,8 @@
 - Tests: handoff 4/4; suite 2126/0/27 (122,68 s).
 - Licao P0 registrada no ai-mesh: hash identico pode significar symlink.
 - Proximo: monitorar kernel Kaggle (unica tarefa na fila, bloqueio externo).
+
+### 2026-11-22 — verificação Vault
+- 570 notas / git limpo / 102 pontos Qdrant em 34 paths existentes.
+- Registrado como nao-problema em KNOWLEDGE-SYSTEM-AUDIT.md secao 6.
+- Nenhuma nota alterada; nenhuma colecao escrita.

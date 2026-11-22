@@ -118,3 +118,18 @@ docstring do `recall` prometia dedup ">95% similar" que o código não fazia
    (hoje a memória é só de falhas: 352 `failure`/`fix`, 0 decisão).
 5. Vault: decidir destino do remote (hoje local-only ⇒ um disco perdido
    apaga tudo; o commit resolve rollback, não backup).
+
+## 6. Verificação 22/11 — Vault × índice (não-problema medido)
+
+- `~/.local/state/jarvis/vault`: **570 notas .md**, repo Git próprio,
+  `git status --short` limpo (0 pendências), 7,5 MB. As 276 notas antes
+  untracked foram commitadas em `36d5f49` (correção de 19/11 preservada).
+- Coleção Qdrant `vault`: **102 pontos / 34 caminhos únicos**, todos os 34
+  existentes no disco (0 órfãos). Payload tem `content_hash`, `document_id`,
+  `path`, `chunk_index` — proveniência canônica intacta após o rag-prune
+  (que só tocou `code_index` e `books`).
+- **Interpretação:** a fronteira desta casa é Vault = durabilidade legível,
+  RAG = conhecimento documental indexado; 34/570 indexadas é policy seletiva,
+  **não** evidência de perda. Não indexar as 536 restantes em massa sem
+  hipótese e gate medidos (evita realimentação de resumos no índice).
+- Nenhuma nota foi movida, reescrita ou apagada nesta verificação.

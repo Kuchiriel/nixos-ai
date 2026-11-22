@@ -646,3 +646,8 @@ Estado MEDIDO agora:
 - **Risco de retomada:** se algum agente esperar o protocolo dentro de
   `AGENTS.md`, o ponteiro no fim do arquivo aponta para `BUFFY.md`; nao
   reconstruir o bloco embutido (reintroduz o custo de contexto).
+
+## 22/11 — verificação Vault (somente leitura)
+- 570 notas, repo do vault limpo, 102 pontos/34 paths indexados, 0 orfãos;
+  fronteira Vault≠RAG confirmada. Nenhuma ação de escrita tomada.
+- HEAD final desta janela: 54279a45 (após docs de context engineering).
