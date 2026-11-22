@@ -1123,7 +1123,11 @@ async function handler(req, res) {
       // (19/11) A API devolve as mensagens NEWEST-FIRST: o log chegava de
       // cabeca para baixo e repetia turnos. Ordena por epoch (asc), dedupa
       // por conteudo normalizado e devolve um log de conversa legivel.
-      const msgs = all.slice(-30);
+      // (22/11, medido) a API e NEWEST-FIRST: slice(-30) pegava as 30
+      // MAIS ANTIGAS e o log diario perdia o fim da conversa (sessao de 50
+      // mensagens parava em 02:15 quando a conversa ia ate 02:22). O slice
+      // correto e cabeca do array; a ordenacao abaixo deixa a leitura asc.
+      const msgs = all.slice(0, 30);
       const rows = [];
       for (const m of msgs) {
         const epoch = m.time?.created ? (m.time.created > 1e12 ? m.time.created : m.time.created * 1000) : 0;
