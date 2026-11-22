@@ -458,3 +458,117 @@ Estado MEDIDO agora:
 - Riscos: quota Kaggle (kernel longo 2000 passos em execução); d0008/d0009
   fecharam sozinhas por condições inválidas, d0010=Sim e d0011=Sim já
   executadas; nenhuma decisão pendente no momento.
+
+## Retomada 22/11 (missão contínua — auditoria de sync/contratos)
+
+- **HEAD no início da janela:** `d4adacb7`; **HEAD final:** `ec7ef23b`
+  (commit isolado `--only`: correção do `/api/transcript`). Delta desde o
+  checkpoint anterior (`f6764878`): LittleBit-2 PRs #13–15, proveniência RAG,
+  sops, d0013, fleet-dispatch — todos documentados em seções próprias.
+- **Protocolo de retomada:** AGENTS.md lido; checkpoint e log lidos; roster
+  e bus consultados; Git/worktrees inspecionados. `jarvis_rehydrate` NÃO está
+  disponível no MCP desta sessão (ferramentas jarvis = coord/health/roster),
+  então a reidratação foi feita pelos registros persistentes.
+- **Item 6 (auditoria de sync) FECHADO com evidência:**
+  - `sync-status` v2 no canônico `ai-mesh/shared/scripts` — classifica
+    `shim|env|shebang|REAL`, skills recursivo, `--check` gateia só drift real.
+    Medido: `drift_total=184` → **`drift_real=0`**, rc=0. 9 testes (phone+host).
+    Cópia antiga arquivada com sha em `~/work/hub/backups/2026-11-22/`.
+  - `downgrade-opencode-2.2.5.sh` do host era **stale** (sem fix de contrato
+    09/11) → virou shim ao canônico; backup com sha arquivado.
+  - `notify` e `decidir` (cópia full) → shims do canônico: `manifest-check
+    --parity` **0 antes / 0 depois**, help/lista idênticos byte-a-byte, notify
+    real OK, `jobs-audit` 0 quebrados. Backups com sha arquivados.
+  - Plugins de memória: **não há divergência funcional**. Medido:
+    `summaryIsDegenerate` (824 chars) e `fallbackSummary` (749) idênticas
+    após normalizar; 11 funções só-phone e 15 só-host são específicas de
+    runtime. Criado `plugin-core-parity` (3 testes, PASS 2/2 real) como
+    guarda permanente — **NÃO fundir os plugins** (API V2 vs hooks do host).
+  - `manifest-check --parity` final: 0 divergências, 139 scripts, 4 serviços OK.
+- **Hub da frota (P1 corrigido):** `/api/transcript` usava `slice(-30)` em
+  array **newest-first**, cortando o fim de conversas longas (medido: 02:15:43
+  vs 02:22:37). Corrigido para `slice(0,30)`, `node --check` OK, commit
+  `ec7ef23b`. **Pendente:** reiniciar `agent-hub.service` (não é o opencode)
+  e consolidar o log diário assim que o sweep noturno terminar.
+- **LittleBit-2:** validador dos 7 gates (`ai-mesh/shared/scripts/littlebit2-validate`,
+  8 testes, provado 0/7 no output do harness antigo) + runbook + lição P0 do
+  log JSONL do Kaggle. Kernel v3 medido **QUEUED** às 12:59/13:10/13:24Z;
+  gap segue aberto. 4 hipóteses de uso com gates em
+  `ai-mesh/docs/littlebit2-uso-hipoteses-2026-11-22.md`; backlog #23–25.
+- **Testes nesta janela:** ai-mesh suite 129/129 OK; littlebit2-validate 8/8;
+  sync-status 9/9 (phone+host); plugin-core-parity 3/3; suíte nixos-ai
+  2109 passed / 0 failed / 27 skipped (medida anterior, sem mudança de código
+  Python nesta janela).
+- **Lições P0 registradas** em `ai-mesh/docs/ARMADILHAS.md` + memória
+  episódica: log Kaggle é JSONL; runtime full-copy fica stale; opencode escuta
+  só no IP do tailnet; `/tmp` remoto não grava; `backlog` sem subcomando.
+
+## Pendências (22/11 — consolidadas)
+- Kernel Kaggle oficial: aguardar COMPLETE → baixar output → validar 7/7 →
+  só então fechar `gap-littlebit2-full-qat-b4`. Tarefa na fila auto-wake.
+- Sweep noturno de endpoints LLM em background; ao terminar: restart
+  `agent-hub.service` + `fleet-endpoint-sweep.py --consolidate-only`.
+- `rag-prune --apply` (produção) continua exigindo autorização explícita.
+- Windows: contratos declarados, mas sem SSH/MCP — depende do dono.
+- Árvore suja com ~30 itens de outras lanes (memory.js, agent-roster.py,
+  reports, untracked) — **NUNCA `git add -A`**; commits sempre `--only`.
+- Worktrees de outras lanes preservados (coord-mcp/Onca, littlebit2-*, rag-*).
+
+## Próxima tarefa exata
+1. Confirmar fim do sweep → `systemctl --user restart agent-hub.service`
+   (NÃO reiniciar opencode) → validar `/api/transcript` com sessão >30 msgs
+   → rodar `--consolidate-only` e conferir o log diário.
+2. Levantar dono/lane das mudanças não commitadas do host e registrar no bus
+   (fila auto-wake), sem commitar.
+3. H3 LittleBit-2: RAG binário ITQ com 1000 queries (backlog #23).
+
+## Riscos de retomada
+- Sweep em background pode ainda estar vivo; reiniciar o hub antes dele
+  terminar interrompe chamadas `/api/models` e `/api/transcript`.
+- Nenhuma escrita em Qdrant de produção, opencode.db, serviços ativos ou VM.
+- Segredos apenas em variáveis de shell locais; nunca bus/repo/clipboard.
+
+## Retomada 22/11 — lote 2 (contratos, papers, hub, frota)
+
+- **HEAD final desta janela:** `7ce0c825` (fix do timeout do sweep). Commits
+  intermediários: `ec7ef23b` (transcript), `7ce0c825`.
+- **Contratos de capacidade:** gap real corrigido — não existia
+  `manifests/linux.json`; criado gerador medido `linux-manifest`
+  (TCP connect + skills/scripts/plugins do disco + providers do hub),
+  manifesto com 8 serviços up, 14 skills, 8 plugins, 9 providers. Ajuste P0:
+  sondar também o IP do tailnet (só loopback subnotificava). Windows segue
+  `status: limited` por decisão do dono. Matriz em
+  `ai-mesh/docs/fleet-capability-contracts-2026-11-22.md`.
+- **Guarda de plugins:** `memory.js` × `memory-termux.js` **não divergem**:
+  as 2 funções compartilhadas são idênticas (824/749 chars normalizados);
+  11 funções só-phone e 15 só-host são específicas de runtime. Criado
+  `plugin-core-parity` (3 testes, PASS real 2/2) — não fundir plugins.
+- **Papers de memória:** pesquisa com fontes primárias (arXiv 2606.06448,
+  2602.06052, ACL 2026) levou à decisão de **não** adotar Letta/Mem0/Zep.
+  Criado `memory-ledger` (read-only): medido 547 registros na malha,
+  6 decisões, 460 lições, 0 duplicatas (índice 0.0) → problema é cobertura
+  de decisões, não dedup. 3 testes.
+- **Hub/frota:** `/api/transcript` corrigido e commitado; sweep noturno ainda
+  em execução no fim da janela (5/9 spawns). Medido que 3 "spawn timeout
+  240s" eram **falso negativo** — sessões existiam com tool calls reais;
+  timeout do wrapper alinhado para 900s.
+- **Testes do lote:** ai-mesh suite 129/129 + novos módulos (3+3+3+8+9),
+  `manifest-check --parity` 0/0, `jobs-audit` limpo, `node --check` do hub OK.
+
+## Pendências do lote 2
+- Ao terminar o sweep: `systemctl --user restart agent-hub.service` (NÃO o
+  opencode), validar `/api/transcript` com sessão >30 mensagens e rodar
+  `fleet-endpoint-sweep.py --consolidate-only` (tarefa enfileirada no auto-wake).
+- Verificar por que alguns providers não postaram no bus (429 no gemini,
+  ovhcloud com 2 linhas) antes de declarar endpoint improdutivo.
+- Windows: SSH/MCP dependem de declaração do dono (registrado no bus).
+
+## Próxima tarefa exata (atualizada)
+1. Concluir hub + log diário pós-sweep (enfileirado).
+2. Auditoria de dono das mudanças não commitadas do host (enfileirada).
+3. H3 RAG ITQ 1000 queries — backlog #23 (enfileirada).
+
+## Riscos adicionais
+- `docs/auto-improve-resolution.json` no clone do celular fica sujo por job
+  de outra lane; usar `git merge --ff-only` em vez de `pull --rebase`.
+- Nenhum manifesto ativa serviço; plataforma Windows exige decisão humana.

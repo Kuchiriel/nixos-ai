@@ -1576,3 +1576,30 @@
   31/31 mas ainda afirma 3 loops cognitivos (target F8 = 1). harbor/uv
   ausentes; docker OK. Nada instalado.
 - Reabrir apenas quando o linter de convergencia exigir 1 loop.
+
+### 2026-11-22 — retomada contínua (sync, plugins, hub, LittleBit-2)
+- Sessão: Crouton Alpha / Termux · HEAD inicial `d4adacb7` · HEAD final `ec7ef23b`.
+- Sync: `sync-status` v2 (drift real 0), shims `downgrade`/`notify`/`decidir`,
+  guarda `plugin-core-parity`, parity 0/0, jobs-audit limpo.
+- Hub: `/api/transcript` corrigido (`slice(0,30)`) com prova 02:15 vs 02:22;
+  restart e consolidação do log diário ficaram pendentes do sweep noturno.
+- LittleBit-2: validador 7 gates, runbook, 4 hipóteses de uso, backlog #23–25;
+  kernel medido QUEUED (13:24Z), gap mantido aberto.
+- Testes: ai-mesh 129/129; littlebit2-validate 8/8; sync-status 9/9;
+  plugin-core-parity 3/3; suíte nixos-ai 2109/0/27 (anterior).
+- Próximo: restart do hub + consolidação do log; depois auditoria de dono das
+  mudanças não commitadas e H3 (RAG ITQ 1000 queries).
+
+### 2026-11-22 — lote 2 (retomada contínua)
+- HEAD inicial `d4adacb7`, final `7ce0c825`.
+- Contratos: manifesto canônico do Linux com gerador medido (8 serviços,
+  14 skills, 9 providers); matriz comparativa Termux/Linux/Windows; gaps
+  topológicos separados de gaps que exigem dono.
+- Plugins: guarda `plugin-core-parity` — núcleo idêntico, ports distintos.
+- Papers: decisão de não adotar frameworks novos; `memory-ledger` mediu
+  547 registros / 6 decisões / 460 lições / 0 duplicatas.
+- Frota: timeout do sweep alinhado a 900s depois de provar falso negativo
+  nas sessões nvidia/cloudflare/openrouter.
+- Testes: módulos novos 3/3 cada; suíte anterior 2109/0/27; parity 0/0.
+- Próximo: reiniciar hub e consolidar log após o sweep; depois auditoria de
+  dono das mudanças não commitadas e H3 (RAG ITQ 1000 queries).
