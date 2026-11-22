@@ -1568,3 +1568,11 @@
   mitigados; Harbor POLICY-BLOCKED (ADR-005 §10) com docker agora OK;
   R8/E1-shape são limite de modelo; kb weekly/lint comportamental/observação
   seguem abertos. Sem instalação ou ativação.
+
+### 2026-11-22 — d0013 respondida: Harbor/uv deferido
+- Autonomia concedida pelo dono ("liberdade absoluta"); resposta registrada:
+  d0013 = Deferir.
+- Base medida: ADR-005 §10 (Harbor so pos-kernel); test_runtime_convergence
+  31/31 mas ainda afirma 3 loops cognitivos (target F8 = 1). harbor/uv
+  ausentes; docker OK. Nada instalado.
+- Reabrir apenas quando o linter de convergencia exigir 1 loop.
