@@ -6,7 +6,7 @@ Modes:
   --snapshot       create a Qdrant snapshot of the target collection
   --migrate        set branch/git_commit on all points of the target collection
   --indexes        create keyword payload indexes for both fields
-  --measure        sample recall@8 and latency with a branch filter
+  --measure        sample recall@8 and latency with each point's own branch filter
 """
 from __future__ import annotations
 import argparse, json, subprocess, time, urllib.error, urllib.request
@@ -89,11 +89,23 @@ def indexes(collection):
                       'payload_schema': list(info.get('payload_schema', {}).keys())}))
 
 
+def payload_branch(point):
+    """Return the branch stored on a sampled point, never the checkout HEAD."""
+    payload = point.get('payload') or {}
+    return str(payload.get('branch') or '').strip()
+
+
 def measure(collection, n=30):
     pts = scroll_all(collection, n, with_vectors=True, with_payload=True)
-    branch = provenance()['branch']
     lat, hit = [], 0
+    filters = {}
+    skipped_no_branch = 0
     for p in pts:
+        branch = payload_branch(p)
+        if not branch:
+            skipped_no_branch += 1
+            continue
+        filters[branch] = filters.get(branch, 0) + 1
         body = {'query': p['vector']['dense'], 'using': 'dense', 'filter': {'must': [
                     {'key': 'branch', 'match': {'value': branch}}]},
                 'limit': 8, 'with_payload': False}
@@ -103,7 +115,10 @@ def measure(collection, n=30):
         hit += any(x['id'] == p['id'] for x in res)
     print(json.dumps({'collection': collection, 'queries': len(lat),
                       'recall_at_8': round(hit / max(len(lat), 1), 3),
-                      'latency_ms_mean': round(sum(lat) / max(len(lat), 1), 2)}))
+                      'latency_ms_mean': round(sum(lat) / max(len(lat), 1), 2),
+                      'filter_mode': 'point_branch',
+                      'filters': filters,
+                      'skipped_no_branch': skipped_no_branch}))
 
 
 def main():
