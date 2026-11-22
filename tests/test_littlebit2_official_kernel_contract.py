@@ -57,6 +57,20 @@ class LittleBit2OfficialKernelContractTests(unittest.TestCase):
         self.assertEqual(self.contract, module.EMBEDDED_CONTRACT)
         self.assertEqual(self.contract, module.CONTRACT)
 
+    def test_gpu_query_parser_counts_two_measured_t4_rows(self):
+        script_path = KERNEL / "script.py"
+        spec = importlib.util.spec_from_loader(
+            "littlebit2_official_kernel_gpu_parser",
+            SourceFileLoader("littlebit2_official_kernel_gpu_parser", str(script_path)),
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        rows = module.parse_gpu_rows(
+            "Tesla T4, 15360, 14912\nTesla T4, 15360, 14912\n"
+        )
+        self.assertEqual(2, len(rows))
+        self.assertEqual({"name": "Tesla T4", "total_mib": 15360, "free_mib": 14912}, rows[0])
+
     def test_script_imports_with_only_code_file_present(self):
         import tempfile
         tmp = pathlib.Path(tempfile.mkdtemp(prefix="littlebit2-kaggle-code-file-"))
