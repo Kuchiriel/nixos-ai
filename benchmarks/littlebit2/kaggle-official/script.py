@@ -152,7 +152,7 @@ def prepare_repository() -> None:
     if not REPO.exists():
         run(["git", "clone", "-q", "https://github.com/SamsungLabs/LittleBit.git", str(REPO)])
     run(["git", "checkout", "-q", COMMIT], cwd=REPO)
-    actual = run(["git", "rev-parse", "HEAD"], cwd=REPO).strip()
+    actual = run(["git", "rev-parse", "HEAD"], cwd=REPO, capture=True).strip()
     if actual != COMMIT:
         raise RuntimeError(f"official commit mismatch: {actual} != {COMMIT}")
     main = (REPO / "main.py").read_text(encoding="utf-8")

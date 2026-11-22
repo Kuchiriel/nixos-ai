@@ -130,6 +130,34 @@ class LittleBit2OfficialKernelContractTests(unittest.TestCase):
         self.assertIn("benchmarks/littlebit2/kaggle-official/script.py", wrapper)
         py_compile.compile(str(ITQ_KERNEL / "script_littlebit2.py"), doraise=True)
 
+    def test_repository_commit_check_captures_stdout(self):
+        import tempfile
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="littlebit2-revparse-"))
+        repo = tmp / "LittleBit"
+        (repo / "utils").mkdir(parents=True)
+        (repo / "main.py").write_text("TrainingArguments( KDTrainer( deepspeed.initialize( littlebit_config.json save_pretrained( ", encoding="utf-8")
+        (repo / "utils/kd_utils.py").write_text("KDTrainer F.kl_div( hidden_states[1:] mse_loss", encoding="utf-8")
+        (repo / "configs").mkdir()
+        (repo / "configs/zero3.json").write_text("{}", encoding="utf-8")
+        spec = importlib.util.spec_from_loader(
+            "littlebit2_official_kernel_revparse",
+            SourceFileLoader("littlebit2_official_kernel_revparse", str(KERNEL / "script.py")),
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        calls = []
+        def fake_run(command, *, cwd=None, env=None, capture=False):
+            calls.append((command, capture))
+            if command[-1] == "HEAD" and "rev-parse" in command:
+                return module.COMMIT if capture else ""
+            return ""
+        module.REPO = repo
+        module.run = fake_run
+        module.prepare_repository()
+        rev = [row for row in calls if "rev-parse" in row[0]]
+        self.assertEqual(1, len(rev))
+        self.assertTrue(rev[0][1], "rev-parse must capture stdout or the commit check sees an empty string")
+
     def test_kernel_metadata_and_script_are_executable_contract(self):
         self.assertEqual("script.py", self.metadata["code_file"])
         self.assertEqual("NvidiaTeslaT4", self.metadata["machine_shape"])
