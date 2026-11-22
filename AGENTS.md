@@ -380,6 +380,10 @@ read pt-BR); answer the owner in pt-BR.
   Triggers: broke before, before touching, trap, why.
 - [`.agents/mcp-catalog.md`](.agents/mcp-catalog.md) — who exposes what (jarvis, nixos, tavily, context7).
   Triggers: mcp, tavily, context7, browser, nix search, vault, github.
+- [`.agents/judgments-do-dono.md`](.agents/judgments-do-dono.md) — a trilha em que
+  o modelo responde por procuração do dono (captura/voz, registro unico,
+  dataset, bench) e os invariantes que já custaram bug.
+  Triggers: judgments, labels, uhrs, relevance, delegation, proxy, bench, heldout.
 
 ## Frontmatter
 
