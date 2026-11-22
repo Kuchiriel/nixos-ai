@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "official_commit": "42d658b0c79f76450b34b6a3547462c7cdc3e1a0",
+  "model": "Qwen/Qwen3-0.6B",
+  "dataset": "wikitext2",
+  "variants": [
+    {"name": "baseline", "use_itq": false},
+    {"name": "littlebit2", "use_itq": true}
+  ],
+  "protocol": {
+    "trainer": "official main.py",
+    "epochs": 5.0,
+    "seed": 42,
+    "sequence_length": 2048,
+    "expected_dataset_examples": 1229,
+    "per_device_train_batch_size": 1,
+    "gradient_accumulation_steps": 2,
+    "effective_global_batch_size": 4,
+    "expected_optimizer_steps_per_variant": 1540,
+    "learning_rate": 0.00004,
+    "warmup_ratio": 0.02,
+    "scheduler": "cosine",
+    "l2l_loss_scale": 10.0,
+    "residual": true,
+    "eff_bit": 1.0,
+    "kv_factor": 1.0,
+    "min_split_dim": 8,
+    "quant_func": "SmoothSign",
+    "quant_mod": "LittleBitLinear",
+    "deepspeed_config": "configs/zero3.json"
+  },
+  "resources": {
+    "minimum_gpu_count": 2,
+    "minimum_vram_mib_per_gpu": 15000,
+    "kaggle_session_limit_hours": 12,
+    "kaggle_machine_shape": "NvidiaTeslaT4"
+  },
+  "evaluation": {
+    "ppl_evaluator": "official eval.py",
+    "ppl_task": "wikitext2",
+    "decode_max_new_tokens": 128,
+    "decode_warmup_tokens": 16,
+    "seed": 42
+  },
+  "stop_conditions": [
+    "official commit mismatch",
+    "fewer than two GPUs or insufficient VRAM",
+    "dataset example count differs from the measured contract",
+    "official trainer exits non-zero",
+    "checkpoint or littlebit_config.json is missing",
+    "official PPL evaluation fails"
+  ],
+  "production_writes": false
+}
