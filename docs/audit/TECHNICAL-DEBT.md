@@ -29,7 +29,10 @@ dívida; P3 estética. Impacto real, não quantidade de arquivos.
   (escrita em produção, exige autorização).
 - sync host↔phone: drift 176 (`sync-status`, report-only).
 - Memória episódica error-only (sem decisões bem-sucedidas) — `KNOWLEDGE-SYSTEM-AUDIT.md`.
-- Relatórios CYCLE-4..9 com itens abertos (Harbor BLOCKED por framework ausente).
+- CYCLE-4..9: crash e `approval_callback` **resolvidos**; Harbor agora e
+  decisao de produto (ADR-005 §10), nao apenas framework ausente; R8/E1-shape
+  e L9/L10 sao limites de modelo. Classificacao completa em
+  `docs/audit/CYCLE-4-TO-9-DEBT-AUDIT-2026-11-21.md`.
 
 - **28 worktrees `ai-mesh-sync-*` no celular (~2,4 GB)**: 27 são checkouts
   antigos com tree divergente do `main`; nenhum tem arquivo ausente no canônico

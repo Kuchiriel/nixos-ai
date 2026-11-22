@@ -1561,3 +1561,10 @@
   do jobs-audit, `publicar_bus(projeto)` sem NameError e politica status/done.
 - Celular virou shim para o host com trace local; Bash antigo arquivado com
   sha 94637d72 e manifesto. A/B rerodado 3/3, shim --dry-run OK, job 116 vivo.
+
+### 2026-11-21 — dívida CYCLE-4..9 classificada
+- 7 relatórios auditados: crash Popen([]) e approval_callback RESOLVIDOS
+  (testes 10/10 e 22/22); str_replace disponível; agent-loop/API e NIM
+  mitigados; Harbor POLICY-BLOCKED (ADR-005 §10) com docker agora OK;
+  R8/E1-shape são limite de modelo; kb weekly/lint comportamental/observação
+  seguem abertos. Sem instalação ou ativação.
