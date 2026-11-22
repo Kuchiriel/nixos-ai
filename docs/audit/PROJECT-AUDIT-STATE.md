@@ -606,3 +606,23 @@ Estado MEDIDO agora:
   hub com nova correção, H3 negativa, kernel ainda QUEUED).
 - Bloqueio externo: kernel Kaggle em QUEUED desde ~12:59Z; sem output. Gap
   LittleBit-2 permanece aberto por decisão, não por falta de validador.
+
+## 22/11 — fechamento da janela (autonomia absoluta do dono)
+
+- **HEAD final:** `c7568497`; fila auto-wake com 1 tarefa (kernel Kaggle).
+- **Tudo que era acionável localmente foi feito:** shims e sync-status v2,
+  guarda de plugins, manifesto canônico do Linux, papers + memory-ledger
+  (decisões 6→9), hub transcript, log diário 3→7 conversas,owners audit,
+  H3 com gate falho, rag-prune aplicado com manifesto, suíte 2126/0/27,
+  AUDIT-FINAL reconciliado e 3 decisões registradas na memória episódica.
+- **Bloqueios externos (registrados no bus 7080199089):** kernel Kaggle
+  QUEUED desde `lastRunTime=2026-11-22T09:53:23Z` (~5 h na fila T4x2);
+  Windows sem SSH/MCP depende de declaração do dono; providers com cota
+  esgotada (gemini/cloudflare/openrouter/llm7/groq/cohere).
+- **Próxima tarefa exata:** quando o kernel virar COMPLETE, baixar output
+  com `kaggle kernels output ... -p ~/work/littlebit2/official-2026-11-22`,
+  rodar `littlebit2-validate --strict` nos 7 gates e só então fechar
+  `gap-littlebit2-full-qat-b4`. Tarefa já está na fila auto-wake.
+- **Riscos:** árvore com ~30 itens de outras lanes (não usar `git add -A`);
+  `docs/auto-improve-resolution.json` sujo por job no clone do celular
+  (usar `git merge --ff-only`); não reiniciar opencode nem serviços ativos.

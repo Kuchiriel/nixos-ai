@@ -1617,3 +1617,9 @@
 - 2126 passed / 0 failed / 27 skipped (157,20 s),rc=0.
 - AUDIT-FINAL reconciliado com o estado vivo; nenhuma linha antiga apagada.
 - Kernel Kaggle medido QUEUED novamente; tarefa requeueada no auto-wake.
+
+### 2026-11-22 — fechamento da janela
+- HEAD final c7568497. Fila com 1 tarefa (kernel Kaggle, bloqueio externo).
+- Bloqueios externos publicados no bus (7080199089).
+- 3 decisões validadas adicionadas à memória episódica (decisões 6→9).
+- Próximo: baixar/validar output do kernel quando COMPLETE; não reenviar job.
