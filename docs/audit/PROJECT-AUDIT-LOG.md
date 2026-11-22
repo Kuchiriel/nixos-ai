@@ -1623,3 +1623,11 @@
 - Bloqueios externos publicados no bus (7080199089).
 - 3 decisões validadas adicionadas à memória episódica (decisões 6→9).
 - Próximo: baixar/validar output do kernel quando COMPLETE; não reenviar job.
+
+### 2026-11-22 — context engineering (AGENTS/BUFFY)
+- HEAD inicial 3d74083a, final 35205b4c.
+- AGENTS.md 1684->406 linhas (90.047->26.888 bytes); BUFFY.md materializado
+  como arquivo regular com o conteudo integral (era symlink).
+- Tests: handoff 4/4; suite 2126/0/27 (122,68 s).
+- Licao P0 registrada no ai-mesh: hash identico pode significar symlink.
+- Proximo: monitorar kernel Kaggle (unica tarefa na fila, bloqueio externo).

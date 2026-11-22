@@ -626,3 +626,23 @@ Estado MEDIDO agora:
 - **Riscos:** árvore com ~30 itens de outras lanes (não usar `git add -A`);
   `docs/auto-improve-resolution.json` sujo por job no clone do celular
   (usar `git merge --ff-only`); não reiniciar opencode nem serviços ativos.
+
+## 22/11 — AGENTS.md / BUFFY.md (context engineering, lote final)
+
+- **HEAD:** `35205b4c` (antes `3d74083a`). Árvore segue com itens de outras
+  lanes; commits feitos somente com caminhos explícitos.
+- **Problema medido:** `AGENTS.md` tinha 1.684 linhas / 90.047 bytes e o
+  próprio cabeçalho declarava alvo `<150 linhas`; quase todo o volume era o
+  protocolo BUFFY embutido. O config `local-mtp.json` já registrava o custo
+  de contexto ("20k+ tokens porque o AGENTS.md do projeto com 46 KB").
+- **Armadilha P0:** `BUFFY.md` era **symlink** para `AGENTS.md` — encurtar o
+  alvo apagaria o protocolo integral. Backup com sha em
+  `~/work/hub/backups/2026-11-22/AGENTS.md.full-1684.bak`; materializei
+  `BUFFY.md` como arquivo regular com os bytes originais (sha256 f1aaa1c0…).
+- **Resultado:** `AGENTS.md` 406 linhas / 26.888 bytes (−70%); `BUFFY.md`
+  1.684 linhas / 90.047 bytes intacto; marker do gerador de handoff mantido.
+  Nenhum consumidor assume o symlink (grep negativo). Testes: handoff 4/4,
+  suíte completa **2126 passed / 0 failed / 27 skipped** (122,68 s).
+- **Risco de retomada:** se algum agente esperar o protocolo dentro de
+  `AGENTS.md`, o ponteiro no fim do arquivo aponta para `BUFFY.md`; nao
+  reconstruir o bloco embutido (reintroduz o custo de contexto).
