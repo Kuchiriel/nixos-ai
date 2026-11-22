@@ -120,17 +120,25 @@ def run(command: list[str], *, cwd: Path | None = None, env: dict[str, str] | No
     return (result.stdout or "") if capture else ""
 
 
+def parse_gpu_rows(raw: str) -> list[dict]:
+    rows = []
+    for line in raw.splitlines():
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) == 3:
+            try:
+                rows.append({"name": parts[0], "total_mib": int(parts[1]), "free_mib": int(parts[2])})
+            except ValueError:
+                continue
+    return rows
+
+
 def verify_environment() -> dict:
     query = [
         "nvidia-smi",
         "--query-gpu=name,memory.total,memory.free",
         "--format=csv,noheader,nounits",
     ]
-    rows = []
-    for line in run(query).splitlines():
-        parts = [part.strip() for part in line.split(",")]
-        if len(parts) == 3:
-            rows.append({"name": parts[0], "total_mib": int(parts[1]), "free_mib": int(parts[2])})
+    rows = parse_gpu_rows(run(query, capture=True))
     if len(rows) < RESOURCES["minimum_gpu_count"]:
         raise RuntimeError(f"need {RESOURCES['minimum_gpu_count']} GPUs, measured {len(rows)}")
     if any(row["total_mib"] < RESOURCES["minimum_vram_mib_per_gpu"] for row in rows):
