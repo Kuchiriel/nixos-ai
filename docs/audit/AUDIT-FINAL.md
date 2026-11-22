@@ -78,7 +78,7 @@ worktrees; converter decisões validadas em memória `kind=decision`.
   mediu 547 registros na malha: 6 `decision`, 460 lições, 0 duplicatas.
   Ainda há poucas decisões, mas a afirmação "error-only" não é mais verdadeira.
 - **Hub `/api/transcript`:** nova correção (slice newest-first) em `ec7ef23b`,
-  validada com sessão de 50 mensagens (fim 02:15:43 → 02:22:20);服务费
+  validada com sessão de 50 mensagens (fim 02:15:43 → 02:22:20);serviço
   reiniciado foi só `agent-hub.service`, nunca o opencode.
 - **Contratos de frota:** manifesto canônico do Linux criado por medição
   (`manifests/linux.json`); Windows segue `limited` por decisão do dono.
