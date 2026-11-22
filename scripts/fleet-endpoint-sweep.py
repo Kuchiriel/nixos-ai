@@ -104,7 +104,10 @@ def spawn(provider_id: str, model: str, task: str, peer: str) -> dict | None:
     env = dict(os.environ, JARVIS_SPAWN_ALLOW_OVERRIDE="1")
     cmd = ["python3", "scripts/agent-spawn.py", "--task", task, "--name", name,
            "--model", model, "--requester", "crouton-alpha"]
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=240,
+    # (22/11, medido) o spawn interno permite 900s; 240s do wrapper rotulava
+    # como "spawn timeout" sessoes que EXISTIAM e estavam trabalhando
+    # (nvidia/cloudflare/openrouter medidos no /api/agents e /api/transcript).
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=900,
                        cwd=str(REPO), env=env)
     try:
         d = json.loads(p.stdout)
@@ -201,7 +204,7 @@ def main() -> int:
             # (19/11) Um provider lento (ovhcloud 70B) nao pode matar a
             # varredura inteira: registra o tempo esgotado e segue.
             result = {"name": f"endpoint-{pid}", "provider": pid,
-                      "error": "spawn timeout 240s", "ok": False}
+                      "error": "spawn timeout 900s", "ok": False}
         except Exception as exc:  # noqa: BLE001
             result = {"name": f"endpoint-{pid}", "provider": pid,
                       "error": f"spawn failed: {type(exc).__name__}: {exc}"[:300], "ok": False}
