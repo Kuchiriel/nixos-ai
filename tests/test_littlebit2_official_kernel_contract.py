@@ -1,7 +1,10 @@
+import importlib.util
 import json
 import pathlib
 import py_compile
+import shutil
 import unittest
+from importlib.machinery import SourceFileLoader
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -42,6 +45,31 @@ class LittleBit2OfficialKernelContractTests(unittest.TestCase):
             protocol["expected_optimizer_steps_per_variant"],
             steps_per_epoch * int(protocol["epochs"]),
         )
+
+    def test_script_embeds_the_same_contract_for_code_file_only_uploads(self):
+        script_path = KERNEL / "script.py"
+        spec = importlib.util.spec_from_loader(
+            "littlebit2_official_kernel_script",
+            SourceFileLoader("littlebit2_official_kernel_script", str(script_path)),
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(self.contract, module.EMBEDDED_CONTRACT)
+        self.assertEqual(self.contract, module.CONTRACT)
+
+    def test_script_imports_with_only_code_file_present(self):
+        import tempfile
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="littlebit2-kaggle-code-file-"))
+        script_path = tmp / "script.py"
+        shutil.copy2(KERNEL / "script.py", script_path)
+        spec = importlib.util.spec_from_loader(
+            "littlebit2_official_kernel_code_file_only",
+            SourceFileLoader("littlebit2_official_kernel_code_file_only", str(script_path)),
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(self.contract, module.CONTRACT)
+        self.assertFalse((tmp / "contract.json").exists())
 
     def test_kernel_metadata_and_script_are_executable_contract(self):
         self.assertEqual("script.py", self.metadata["code_file"])
