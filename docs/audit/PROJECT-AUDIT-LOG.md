@@ -1612,3 +1612,8 @@
 - Owners das mudanças não commitadas publicados no bus; nada de outras lanes
   foi commitado.
 - Próximo: aguardar kernel Kaggle; se COMPLETE, baixar output e validar 7/7.
+
+### 2026-11-22 — validação pós-rag-prune
+- 2126 passed / 0 failed / 27 skipped (157,20 s),rc=0.
+- AUDIT-FINAL reconciliado com o estado vivo; nenhuma linha antiga apagada.
+- Kernel Kaggle medido QUEUED novamente; tarefa requeueada no auto-wake.

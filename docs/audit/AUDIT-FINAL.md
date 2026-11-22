@@ -63,3 +63,27 @@
 A missão **não** termina por este relatório. Próximos incrementos: completar
 3ª amostra dos chunks para tentar 5/5; limpar `.bak` com manifesto; revisar
 worktrees; converter decisões validadas em memória `kind=decision`.
+
+## Reconciliação 22/11 (missão contínua — não apaga o histórico acima)
+
+- **HEAD vivo:** `91c54bf3` (checkpoint); antes do lote `c080d279`.
+- **Suíte Fase 8 reexecutada:** `nix develop --command python3 -m pytest -q
+  modules/ai/jarvis/tests -p no:randomly` → **2126 passed / 0 failed /
+  27 skipped**, 157,20 s (1 DeprecationWarning conhecido). Nenhuma regressão
+  após rag-prune e após o commit do hub.
+- **rag-prune (item 8 da dívida): RESOLVIDO.** 99.661 pontos stale/missing
+  em `code_index` e 203 em `books` removidos com manifesto e sha antes do
+  delete; re-scan 0 removíveis, 4.463 `no_identity` preservados.
+- **Memória error-only (dívida acima): PARCIALMENTE RESOLVIDO.** `memory-ledger`
+  mediu 547 registros na malha: 6 `decision`, 460 lições, 0 duplicatas.
+  Ainda há poucas decisões, mas a afirmação "error-only" não é mais verdadeira.
+- **Hub `/api/transcript`:** nova correção (slice newest-first) em `ec7ef23b`,
+  validada com sessão de 50 mensagens (fim 02:15:43 → 02:22:20);服务费
+  reiniciado foi só `agent-hub.service`, nunca o opencode.
+- **Contratos de frota:** manifesto canônico do Linux criado por medição
+  (`manifests/linux.json`); Windows segue `limited` por decisão do dono.
+- **LittleBit-2:** H3 (RAG binário com ITQ, 1.000 queries) teve gate
+  pré-registrado **falho** (Δ 0,004; p 0,388) — não adotar. Kernel oficial
+  5-epoch segue `QUEUED` no Kaggle; gap **não** foi fechado.
+- **Dívida que permanece:** 3ª amostra chunk 5/5, worktrees de outras lanes,
+  tailnet oscilante, Windows sem SSH/MCP, kernel Kaggle fora do nosso controle.

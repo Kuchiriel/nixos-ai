@@ -599,3 +599,10 @@ Estado MEDIDO agora:
 - 35 itens não commitados classificados por dono/lane e publicados no bus
   (duplex, bench-token, xref/audit, rag-proveniência, littlebit2, runtime,
   frozen-usdt, legado). Nenhuma mudança de outra lane foi commitada.
+
+## 22/11 — validação final desta janela
+- Suíte Fase 8 reexecutada: **2126 passed / 0 failed / 27 skipped** (157 s).
+- `AUDIT-FINAL.md` reconciliado (rag-prune feito, memória não mais error-only,
+  hub com nova correção, H3 negativa, kernel ainda QUEUED).
+- Bloqueio externo: kernel Kaggle em QUEUED desde ~12:59Z; sem output. Gap
+  LittleBit-2 permanece aberto por decisão, não por falta de validador.
