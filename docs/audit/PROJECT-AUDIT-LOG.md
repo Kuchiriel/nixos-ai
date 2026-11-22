@@ -1603,3 +1603,12 @@
 - Testes: módulos novos 3/3 cada; suíte anterior 2109/0/27; parity 0/0.
 - Próximo: reiniciar hub e consolidar log após o sweep; depois auditoria de
   dono das mudanças não commitadas e H3 (RAG ITQ 1000 queries).
+
+### 2026-11-22 — rag-prune aplicado e H3 fechado
+- HEAD no início `c080d279`; HEAD final (após commits de checkpoint) registrado abaixo.
+- rag-prune: 99.661 + 203 pontos removidos, manifestos com sha, re-scan 0
+  removíveis, eval-rag sem erros. Autorização absoluta do dono nesta sessão.
+- H3: 1000 queries, bootstrap 2000, Δ 0.004/p 0.388 → gate falhou; não adotar.
+- Owners das mudanças não commitadas publicados no bus; nada de outras lanes
+  foi commitado.
+- Próximo: aguardar kernel Kaggle; se COMPLETE, baixar output e validar 7/7.

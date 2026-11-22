@@ -572,3 +572,30 @@ Estado MEDIDO agora:
 - `docs/auto-improve-resolution.json` no clone do celular fica sujo por job
   de outra lane; usar `git merge --ff-only` em vez de `pull --rebase`.
 - Nenhum manifesto ativa serviço; plataforma Windows exige decisão humana.
+
+## 22/11 — rag-prune --apply EXECUTADO (autorização absoluta do dono)
+
+- ANTES (dry-run medido): `code_index` 275.724 pontos, 99.661 removíveis
+  (33.395 stale + 66.266 missing; 0 no_identity); `books` 12.778 pontos,
+  203 removíveis (35 stale + 168 missing; 4.463 no_identity **preservados**).
+- APLICAÇÃO: `jarvis rag-prune --collection <code|books> --apply`
+  (entrypoint canônico da CLI, não `python -m jarvis.cli.rag-prune`).
+  Deletados exatamente 99.661 e 203. Manifestos ANTES do delete:
+  `~/.local/state/jarvis/rag-prune/rag-prune-{code_index,books}-20261122T105215.json`
+  (2.538.175 e 6.392 bytes; 99.661 e 203 ids; sha256 583e53e2… e cb50fdb5…).
+- DEPOIS (re-scan): `code_index` 176.063 current, 0 stale/missing/removível;
+  `books` 8.112 current + 4.463 no_identity intactos, 0 removível.
+- VALIDAÇÃO: `jarvis eval-rag --json` → 11 queries, 0 erros, recall@5 0,364,
+  nDCG@5 0,278. Não havia baseline pré-apply medido nesta janela: o número
+  é registrado como "sistema responde", não como prova de melhoria.
+- Nada foi apagado de Qdrant fora dessas duas coleções, nenhuma coleção
+  foi recriada, nenhum serviço reiniciado. Reversão: ids/paths nos manifestos.
+- Item "rag-prune --apply" das pendências: **FEITO**.
+
+## 22/11 — H3 e donos das mudanças
+- H3 (backlog #23) fechada com resultado NEGATIVO: ITQ no RAG binário com
+  1.000 queries deu Δrecall@8 0,004, IC95 [-0,022,0,027], p=0,388 —
+  gate pré-registrado falhou; **não adotar**. Harness commitado no host.
+- 35 itens não commitados classificados por dono/lane e publicados no bus
+  (duplex, bench-token, xref/audit, rag-proveniência, littlebit2, runtime,
+  frozen-usdt, legado). Nenhuma mudança de outra lane foi commitada.
