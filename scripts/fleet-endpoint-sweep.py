@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -125,6 +126,7 @@ def consolidate_log(manifest: dict) -> Path:
     out = LOGDIR / f"conversations-{DAY}.md"
     header = f"# Conversas da frota — {DAY}\n\nGerado de /api/transcript (ordenado, dedupado).\n"
     blocks = []
+    seen_sessions = set()
     for e in manifest.get("spawns", []):
         sid = e.get("session")
         if not sid:
@@ -133,7 +135,30 @@ def consolidate_log(manifest: dict) -> Path:
         lines = d.get("lines", [])
         if not lines:
             continue
+        seen_sessions.add(sid)
         blocks.append((e.get("name", sid), e.get("model", "?"), lines))
+    # (22/11, medido) spawns que excederam o timeout do wrapper nao entraram
+    # no manifest com session, mas EXISTIAM no hub com tool calls reais.
+    # Descobrir pelo /api/agents evita que o log diario perca conversas.
+    day_start = int(datetime.now().replace(hour=0, minute=0, second=0,
+                                          microsecond=0).timestamp() * 1000)
+    agents = api("/api/agents").get("agents") or []
+    if isinstance(agents, dict):
+        agents = [a for group in agents.values() for a in group]
+    for a in agents:
+        name = str(a.get("name") or a.get("codename") or "")
+        sid = str(a.get("session") or a.get("sessionID") or "")
+        if not name.startswith("endpoint-") or sid in seen_sessions:
+            continue
+        m = re.match(r"ses_spawn(\d+)", sid)
+        if not m or int(m.group(1)) < day_start:
+            continue
+        d = api(f"/api/transcript?session={sid}")
+        lines = d.get("lines", [])
+        if not lines:
+            continue
+        seen_sessions.add(sid)
+        blocks.append((name, str(a.get("model") or "?"), lines))
     blocks.sort(key=lambda b: b[0])
     text = header
     for name, model, lines in blocks:
