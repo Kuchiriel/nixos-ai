@@ -16,7 +16,75 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
-CONTRACT = json.loads((HERE / "contract.json").read_text(encoding="utf-8"))
+# Kaggle kernels push uploads only code_file=script.py. Keep the validated
+# contract embedded so the job never depends on auxiliary repo files.
+EMBEDDED_CONTRACT = json.loads(r'''{
+  "dataset": "wikitext2",
+  "evaluation": {
+    "decode_max_new_tokens": 128,
+    "decode_warmup_tokens": 16,
+    "ppl_evaluator": "official eval.py",
+    "ppl_task": "wikitext2",
+    "seed": 42
+  },
+  "model": "Qwen/Qwen3-0.6B",
+  "official_commit": "42d658b0c79f76450b34b6a3547462c7cdc3e1a0",
+  "production_writes": false,
+  "protocol": {
+    "deepspeed_config": "configs/zero3.json",
+    "eff_bit": 1.0,
+    "effective_global_batch_size": 4,
+    "epochs": 5.0,
+    "expected_dataset_examples": 1229,
+    "expected_optimizer_steps_per_variant": 1540,
+    "gradient_accumulation_steps": 2,
+    "kv_factor": 1.0,
+    "l2l_loss_scale": 10.0,
+    "learning_rate": 4e-05,
+    "min_split_dim": 8,
+    "per_device_train_batch_size": 1,
+    "quant_func": "SmoothSign",
+    "quant_mod": "LittleBitLinear",
+    "residual": true,
+    "scheduler": "cosine",
+    "seed": 42,
+    "sequence_length": 2048,
+    "trainer": "official main.py",
+    "warmup_ratio": 0.02
+  },
+  "resources": {
+    "kaggle_machine_shape": "NvidiaTeslaT4",
+    "kaggle_session_limit_hours": 12,
+    "minimum_gpu_count": 2,
+    "minimum_vram_mib_per_gpu": 15000
+  },
+  "schema": 1,
+  "stop_conditions": [
+    "official commit mismatch",
+    "fewer than two GPUs or insufficient VRAM",
+    "dataset example count differs from the measured contract",
+    "official trainer exits non-zero",
+    "checkpoint or littlebit_config.json is missing",
+    "official PPL evaluation fails"
+  ],
+  "variants": [
+    {
+      "name": "baseline",
+      "use_itq": false
+    },
+    {
+      "name": "littlebit2",
+      "use_itq": true
+    }
+  ]
+}''')
+CONTRACT_PATH = HERE / "contract.json"
+if CONTRACT_PATH.is_file():
+    CONTRACT = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    if CONTRACT != EMBEDDED_CONTRACT:
+        raise RuntimeError("embedded contract differs from contract.json")
+else:
+    CONTRACT = EMBEDDED_CONTRACT
 WORKING = Path("/kaggle/working")
 REPO = WORKING / "LittleBit"
 OUTPUT = WORKING / "official-output"
