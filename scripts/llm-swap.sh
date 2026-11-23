@@ -125,7 +125,13 @@ release() {
         systemctl --user reset-failed "$RES_UNIT_USR" 2>/dev/null || true
         systemctl --user start "$RES_UNIT_USR" 2>/dev/null || true
     fi
+    systemctl --user reset-failed jarvis-heal.service 2>/dev/null || true
     systemctl --user start jarvis-heal.service 2>/dev/null || true
+    for i in $(seq 1 10); do
+        [ "$(systemctl --user is-active jarvis-heal.service 2>/dev/null)" = "active" ] && break
+        systemctl --user start jarvis-heal.service 2>/dev/null || true
+        sleep 1
+    done
     echo "  GPU devolvida (residente: $(systemctl is-active "$RES_UNIT_SYS" 2>/dev/null || echo desligado))"
 }
 
