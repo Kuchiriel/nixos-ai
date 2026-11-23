@@ -821,3 +821,14 @@ Estado MEDIDO agora:
   8092=200 e 8097=200.
 - MCPs duplicados (8765/8766, v4/v6) são intencionais para a frota; o config
   do opencode usa MCP local (`jarvis-mcp-launcher.sh`), não os HTTP.
+
+## 24/11 — frota: backtests Windows e links de docs
+- Tatu (windows/badiel) tem docs 93/96/103 prontos mas commit/push pendem do
+  shell do harness (A47); wake publicado no bus (id 7112205233) com resposta
+  sobre isolar a Mesa (opcao c: entradas estruturalmente不同, custo de edge
+  menor que 17.5% da opcao a) e pedido para nao parar a bateria de 6 backtests.
+- Job 121 `windows-backtest-nudge` (30 min, persisted) criado no celular:
+  publica no bus se nao houver mensagem do Tatu em 2h. Rastro e shebang
+  corrigidos; jobs-audit limpo.
+- `scripts/audit-doc-links.py`: 58 links em docs/audit verificados, 0 quebrados.
+  O xref_audit.py global (2338 dangling) conta paths fora de escopo — ruído.
