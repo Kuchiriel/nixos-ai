@@ -1657,3 +1657,8 @@
 - 2 jobs quebrados backupeados (sha) e removidos para liberar vagas GPU.
 - baseline v6 RUNNING / ITQ v1 QUEUED com scripts corrigidos.
 - Proximo: baixar outputs quando COMPLETE e validar 7 gates.
+
+### 2026-11-23 — preparacao do pipeline de validacao
+- Rebase resolvido e 23 commits enviados ao GitHub (HEAD dc68b1c6).
+- Agregador de outputs + logs com 4 testes; validador provado no output v4.
+- Proximo: agregar/validar quando os dois kernels terminarem.

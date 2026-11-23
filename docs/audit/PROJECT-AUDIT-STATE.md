@@ -703,3 +703,17 @@ Estado MEDIDO agora:
 - Jobs substituidos: baseline **v6 RUNNING** e ITQ **v1 QUEUED**, ambos com
   script gerado por kaggle-split-kernels.py (seqlen 2048, sem NameError).
 - Gap segue aberto ate COMPLETE/downlo/validacao 7/7 dos dois.
+
+## 23/11 — preparação enquanto o kernel corre
+- Commits locais reconciliados e enviados ao origin (HEAD remoto dc68b1c6):
+  resolvido conflito de rebase com a lane que usava LB_VARIANT — script
+  final aceita os dois nomes de env, 1 selected_variants, 1 --seqlen,
+  contrato 12/12. Antes havia 22 commits locais nao publicados.
+- Criado `scripts/aggregate-littlebit2-outputs.py` (4 testes): agrega os
+  dois outputs sem tocar nas fontes, grava manifesto com sha e junta os
+  logs JSONL decodeados em combined-kernel.log (gate 3 exige as duas
+  variantes no mesmo log).
+- Validador dos 7 gates provado contra output parcial real do v4: FAIL 0/7
+  com evidencia correta, sem falso positivo.
+- Proximo: quando os dois jobs ficarem COMPLETE, rodar o agregador e o
+  littlebit2-validate --strict; so entao fechar o gap.
