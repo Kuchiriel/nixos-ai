@@ -776,3 +776,11 @@ Estado MEDIDO agora:
 - Mesmo GGUF/LoRA/flags, so --spec-type muda: draft-mtp 77,88 tok/s e 0,822s
   vs none 54,22 tok/s e 1,162s; aceite 311/559 (55,6%). Ganho +43,6% vazao
   e -29,3% latencia. Commit 0451cb37; servicos restaurados.
+
+## 24/11 — RPC distribuído PROVADO
+- Causa dos fracassos: ggml-rpc nao suporta IPv6 em parse_endpoint; usar IPv4
+  do tailnet + systemd-run --user. Prova real: RPC0 no compute buffer do
+  cliente e Accepted client connection no servidor.
+- Mesmo modelo SmolLM2-135M Q3_K_M (93,5 MB, sha igual): local 44,1 t/s vs
+  distribuido 7,6 t/s (3 repeticoes) — mecanico provado, ~5,8x mais lento.
+- Servico transitorio encerrado; documentado em ai-mesh/docs/llama-rpc-stack.
