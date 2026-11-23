@@ -271,6 +271,7 @@ def official_ppl(path: Path) -> float:
         "--zeroshot_task", "",
         "--batch_size", "1",
         "--num_fewshot", "0",
+        "--seqlen", str(PROTOCOL["sequence_length"]),
     ], cwd=REPO, capture=True)
     (path / "official-eval.log").write_text(output, encoding="utf-8")
     match = re.search(r"\[" + re.escape(EVALUATION["ppl_task"]) + r"\]\s+PPL\s+=\s+([0-9.]+)", output)
@@ -313,6 +314,15 @@ print("LITTLEBIT_DECODE",json.dumps({"elapsed_seconds":elapsed,"generated_tokens
     return result
 
 
+def selected_variants(variants: list[dict], selector: str) -> list[dict]:
+    """Permite dividir as variantes em sessoes Kaggle separadas (limite 12h)."""
+    if selector in ("all", ""):
+        return variants
+    if selector not in {str(v["name"]) for v in variants}:
+        raise RuntimeError(f"unknown LITTLEBIT2_VARIANT: {selector}")
+    return [v for v in variants if v["name"] == selector]
+
+
 def main() -> int:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     log("contract=" + json.dumps(CONTRACT, sort_keys=True))
@@ -342,7 +352,14 @@ def main() -> int:
         "dataset": dataset,
         "variants": {},
     }
+<<<<<<< HEAD
     for variant in selected_variants():
+=======
+    selector = os.environ.get("LITTLEBIT2_VARIANT", "all")
+    variants = selected_variants(CONTRACT["variants"], selector)
+    log(f"selected_variants={[v[name] for v in variants]} selector={selector}")
+    for variant in variants:
+>>>>>>> 7d901c4c (fix(littlebit2): pass contract seqlen to PPL and allow split variant sessions)
         path = train_variant(variant)
         ppl = official_ppl(path)
         decode = decode_latency(path)

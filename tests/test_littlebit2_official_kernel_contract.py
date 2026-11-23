@@ -158,6 +158,45 @@ class LittleBit2OfficialKernelContractTests(unittest.TestCase):
         self.assertEqual(1, len(rev))
         self.assertTrue(rev[0][1], "rev-parse must capture stdout or the commit check sees an empty string")
 
+    def test_ppl_eval_uses_contract_sequence_length(self):
+        script_path = KERNEL / "script.py"
+        spec = importlib.util.spec_from_loader(
+            "littlebit2_official_kernel_ppl_seqlen",
+            SourceFileLoader("littlebit2_official_kernel_ppl_seqlen", str(script_path)),
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        calls = []
+        def fake_run(command, *, cwd=None, env=None, capture=False):
+            calls.append(command)
+            return "[wikitext2] PPL = 16.30"
+        import tempfile
+        fake_repo = pathlib.Path(tempfile.mkdtemp(prefix="littlebit2-ppl-"))
+        module.run = fake_run
+        module.REPO = fake_repo
+        value = module.official_ppl(fake_repo)
+        self.assertEqual(16.30, value)
+        self.assertIn("--seqlen", calls[0])
+        self.assertEqual(str(module.PROTOCOL["sequence_length"]),
+                         calls[0][calls[0].index("--seqlen") + 1])
+
+    def test_variant_selector_supports_single_session_runs(self):
+        script_path = KERNEL / "script.py"
+        spec = importlib.util.spec_from_loader(
+            "littlebit2_official_kernel_selector",
+            SourceFileLoader("littlebit2_official_kernel_selector", str(script_path)),
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        variants = self.contract["variants"]
+        self.assertEqual(2, len(module.selected_variants(variants, "all")))
+        self.assertEqual(["baseline"],
+                         [v["name"] for v in module.selected_variants(variants, "baseline")])
+        self.assertEqual(["littlebit2"],
+                         [v["name"] for v in module.selected_variants(variants, "littlebit2")])
+        with self.assertRaises(RuntimeError):
+            module.selected_variants(variants, "bogus")
+
     def test_kernel_metadata_and_script_are_executable_contract(self):
         self.assertEqual("script.py", self.metadata["code_file"])
         self.assertEqual("NvidiaTeslaT4", self.metadata["machine_shape"])
