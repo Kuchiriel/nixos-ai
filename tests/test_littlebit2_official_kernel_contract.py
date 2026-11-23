@@ -9,6 +9,7 @@ from importlib.machinery import SourceFileLoader
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 KERNEL = ROOT / "benchmarks/littlebit2/kaggle-official"
+ITQ_KERNEL = ROOT / "benchmarks/littlebit2/kaggle-official-itq"
 
 
 class LittleBit2OfficialKernelContractTests(unittest.TestCase):
@@ -25,6 +26,7 @@ class LittleBit2OfficialKernelContractTests(unittest.TestCase):
         self.assertTrue(protocol["residual"])
         self.assertEqual(10.0, protocol["l2l_loss_scale"])
         self.assertEqual(4, protocol["effective_global_batch_size"])
+        self.assertEqual(2048, contract["evaluation"]["ppl_seqlen"])
         self.assertEqual(
             [("baseline", False), ("littlebit2", True)],
             [(row["name"], row["use_itq"]) for row in contract["variants"]],
@@ -85,6 +87,49 @@ class LittleBit2OfficialKernelContractTests(unittest.TestCase):
         self.assertEqual(self.contract, module.CONTRACT)
         self.assertFalse((tmp / "contract.json").exists())
 
+    def test_variant_selection_can_fit_one_variant_per_session(self):
+        import os
+        script_path = KERNEL / "script.py"
+        spec = importlib.util.spec_from_loader(
+            "littlebit2_official_kernel_variant_selection",
+            SourceFileLoader("littlebit2_official_kernel_variant_selection", str(script_path)),
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        old = os.environ.get("LB_VARIANT")
+        try:
+            os.environ["LB_VARIANT"] = "littlebit2"
+            self.assertEqual(
+                [("littlebit2", True)],
+                [(row["name"], row["use_itq"]) for row in module.selected_variants()],
+            )
+            os.environ["LB_VARIANT"] = "baseline"
+            self.assertEqual(
+                [("baseline", False)],
+                [(row["name"], row["use_itq"]) for row in module.selected_variants()],
+            )
+            os.environ["LB_VARIANT"] = "unknown"
+            with self.assertRaises(RuntimeError):
+                module.selected_variants()
+        finally:
+            if old is None:
+                os.environ.pop("LB_VARIANT", None)
+            else:
+                os.environ["LB_VARIANT"] = old
+
+    def test_itq_kernel_runs_one_variant_in_a_separate_session(self):
+        metadata = json.loads((ITQ_KERNEL / "kernel-metadata.json").read_text(encoding="utf-8"))
+        wrapper = (ITQ_KERNEL / "script_littlebit2.py").read_text(encoding="utf-8")
+        self.assertEqual(
+            "kuchiriel/littlebit2-official-qat-5epoch-qwen3-0-6b-littlebit2",
+            metadata["id"],
+        )
+        self.assertEqual("script_littlebit2.py", metadata["code_file"])
+        self.assertEqual("NvidiaTeslaT4", metadata["machine_shape"])
+        self.assertIn('env["LB_VARIANT"] = "littlebit2"', wrapper)
+        self.assertIn("benchmarks/littlebit2/kaggle-official/script.py", wrapper)
+        py_compile.compile(str(ITQ_KERNEL / "script_littlebit2.py"), doraise=True)
+
     def test_kernel_metadata_and_script_are_executable_contract(self):
         self.assertEqual("script.py", self.metadata["code_file"])
         self.assertEqual("NvidiaTeslaT4", self.metadata["machine_shape"])
@@ -93,6 +138,7 @@ class LittleBit2OfficialKernelContractTests(unittest.TestCase):
         script = (KERNEL / "script.py").read_text(encoding="utf-8")
         self.assertIn('"main.py"', script)
         self.assertIn('"eval.py"', script)
+        self.assertIn('"--seqlen"', script)
         self.assertNotIn("minimal_qat.py --use-itq", script)
         py_compile.compile(str(KERNEL / "script.py"), doraise=True)
 

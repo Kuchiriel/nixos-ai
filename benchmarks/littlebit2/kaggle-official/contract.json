@@ -38,6 +38,7 @@
   "evaluation": {
     "ppl_evaluator": "official eval.py",
     "ppl_task": "wikitext2",
+    "ppl_seqlen": 2048,
     "decode_max_new_tokens": 128,
     "decode_warmup_tokens": 16,
     "seed": 42

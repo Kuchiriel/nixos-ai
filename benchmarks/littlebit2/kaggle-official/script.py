@@ -25,6 +25,7 @@ EMBEDDED_CONTRACT = json.loads(r'''{
     "decode_warmup_tokens": 16,
     "ppl_evaluator": "official eval.py",
     "ppl_task": "wikitext2",
+    "ppl_seqlen": 2048,
     "seed": 42
   },
   "model": "Qwen/Qwen3-0.6B",
@@ -247,12 +248,26 @@ def train_variant(variant: dict) -> Path:
     return save_dir
 
 
+def selected_variants() -> list[dict]:
+    """Select one variant when a session cannot fit the paired run."""
+    mode = os.environ.get("LB_VARIANT", "all").strip().lower()
+    if mode in ("", "all"):
+        return list(CONTRACT["variants"])
+    selected = [row for row in CONTRACT["variants"]
+                if mode == str(row.get("name", "")).lower()
+                or mode == ("itq" if row.get("use_itq") else "baseline")]
+    if not selected:
+        raise RuntimeError("LB_VARIANT does not match a contract variant")
+    return selected
+
+
 def official_ppl(path: Path) -> float:
     output = run([
         sys.executable,
         "eval.py",
         "--model_id", str(path),
         "--ppl_task", EVALUATION["ppl_task"],
+        "--seqlen", str(EVALUATION["ppl_seqlen"]),
         "--zeroshot_task", "",
         "--batch_size", "1",
         "--num_fewshot", "0",
@@ -327,7 +342,7 @@ def main() -> int:
         "dataset": dataset,
         "variants": {},
     }
-    for variant in CONTRACT["variants"]:
+    for variant in selected_variants():
         path = train_variant(variant)
         ppl = official_ppl(path)
         decode = decode_latency(path)
