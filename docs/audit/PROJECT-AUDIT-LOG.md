@@ -1641,3 +1641,9 @@
 - HEAD apos fix: 81775c68. Causa: rev-parse sem capture=True (stdout lost).
 - Teste de regressao adicionado; contrato 7/7.
 - v4 pushed e RUNNING; gap ainda aberto ate COMPLETE + validacao 7/7.
+
+### 2026-11-23 — LittleBit2 v4 ERROR por OOM e v5 split
+- Causa: eval.py com seqlen 40960; --seqlen 2048 do contrato corrigido.
+- Duas variantes nao cabem em 12h: separadas em 2 kernels via gerador.
+- baseline v5 RUNNING / ITQ v1 QUEUED. Contrato 9/9 testes.
+- Proximo: aguardar COMPLETE dos dois, baixar outputs, agregar e validar 7/7.

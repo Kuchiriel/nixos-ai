@@ -669,3 +669,16 @@ Estado MEDIDO agora:
   download de output e `littlebit2-validate --strict` com 7/7.
 - Lição: logs de erro do Kaggle são JSONL com campo `data` (o validador
   `littlebit2-validate` já decodifica); nada foi apagado do job anterior.
+
+## 23/11 — kernel oficial: v4 OOM, reproducao dividida em 2 jobs
+
+- v4: baseline 5 epochs COMPLETO em 29094,5 s; `eval.py` oficial OOM
+  (seqlen auto 40960 -> 100 GiB em T4 14,56 GiB). Logs/checkpoint em
+  `~/work/littlebit2/official-v4-error-20261123/`, nada apagado.
+- Fixes commitados: seqlen do contrato no PPL + seletor de variante
+  (`7d901c4c`), testes 9/9; gerador `scripts/kaggle-split-kernels.py`.
+- Kaggle: baseline v5 **RUNNING**; ITQ v1 **QUEUED** (slug
+  `littlebit2-official-itq-5epoch-qwen3-0-6b`). Push do ITQ repetido apos
+  erro de limite de 2 sessoes GPU; nenhum job cancelado.
+- Validacao final agora exige agregar os dois outputs e rodar o validador
+  dos 7 gates. Gap segue aberto. Runbook atualizado no ai-mesh.
