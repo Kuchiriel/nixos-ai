@@ -121,7 +121,7 @@ class LittleBit2OfficialKernelContractTests(unittest.TestCase):
         metadata = json.loads((ITQ_KERNEL / "kernel-metadata.json").read_text(encoding="utf-8"))
         wrapper = (ITQ_KERNEL / "script_littlebit2.py").read_text(encoding="utf-8")
         self.assertEqual(
-            "kuchiriel/littlebit2-official-qat-5epoch-qwen3-0-6b-littlebit2",
+            "kuchiriel/littlebit2-official-qat-5epoch-qwen3-0-6b-itq",
             metadata["id"],
         )
         self.assertEqual("script_littlebit2.py", metadata["code_file"])
