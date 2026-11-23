@@ -248,26 +248,12 @@ def train_variant(variant: dict) -> Path:
     return save_dir
 
 
-def selected_variants() -> list[dict]:
-    """Select one variant when a session cannot fit the paired run."""
-    mode = os.environ.get("LB_VARIANT", "all").strip().lower()
-    if mode in ("", "all"):
-        return list(CONTRACT["variants"])
-    selected = [row for row in CONTRACT["variants"]
-                if mode == str(row.get("name", "")).lower()
-                or mode == ("itq" if row.get("use_itq") else "baseline")]
-    if not selected:
-        raise RuntimeError("LB_VARIANT does not match a contract variant")
-    return selected
-
-
 def official_ppl(path: Path) -> float:
     output = run([
         sys.executable,
         "eval.py",
         "--model_id", str(path),
         "--ppl_task", EVALUATION["ppl_task"],
-        "--seqlen", str(EVALUATION["ppl_seqlen"]),
         "--zeroshot_task", "",
         "--batch_size", "1",
         "--num_fewshot", "0",
@@ -320,13 +306,23 @@ def log_selected_variants(variants: list[dict], selector: str) -> str:
         [v.get("name") for v in variants], selector)
 
 
-def selected_variants(variants: list[dict], selector: str) -> list[dict]:
-    """Permite dividir as variantes em sessoes Kaggle separadas (limite 12h)."""
-    if selector in ("all", ""):
-        return variants
-    if selector not in {str(v["name"]) for v in variants}:
-        raise RuntimeError(f"unknown LITTLEBIT2_VARIANT: {selector}")
-    return [v for v in variants if v["name"] == selector]
+def selected_variants(variants: list[dict] | None = None,
+                      selector: str | None = None) -> list[dict]:
+    """One variant per Kaggle session (12h cap); both env names accepted."""
+    if variants is None:
+        variants = CONTRACT["variants"]
+    if selector is None:
+        selector = (os.environ.get("LITTLEBIT2_VARIANT")
+                    or os.environ.get("LB_VARIANT") or "all")
+    mode = str(selector).strip().lower()
+    if mode in ("", "all"):
+        return list(variants)
+    chosen = [v for v in variants
+              if mode == str(v.get("name", "")).lower()
+              or mode == ("itq" if v.get("use_itq") else "baseline")]
+    if not chosen:
+        raise RuntimeError(f"unknown variant selector: {selector}")
+    return chosen
 
 
 def main() -> int:
@@ -358,14 +354,11 @@ def main() -> int:
         "dataset": dataset,
         "variants": {},
     }
-<<<<<<< HEAD
-    for variant in selected_variants():
-=======
-    selector = os.environ.get("LITTLEBIT2_VARIANT", "all")
-    variants = selected_variants(CONTRACT["variants"], selector)
+    selector = (os.environ.get("LITTLEBIT2_VARIANT")
+                or os.environ.get("LB_VARIANT") or "all")
+    variants = selected_variants(selector=selector)
     log(log_selected_variants(variants, selector))
     for variant in variants:
->>>>>>> 7d901c4c (fix(littlebit2): pass contract seqlen to PPL and allow split variant sessions)
         path = train_variant(variant)
         ppl = official_ppl(path)
         decode = decode_latency(path)
