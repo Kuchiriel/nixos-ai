@@ -784,3 +784,9 @@ Estado MEDIDO agora:
 - Mesmo modelo SmolLM2-135M Q3_K_M (93,5 MB, sha igual): local 44,1 t/s vs
   distribuido 7,6 t/s (3 repeticoes) — mecanico provado, ~5,8x mais lento.
 - Servico transitorio encerrado; documentado em ai-mesh/docs/llama-rpc-stack.
+
+## 24/11 — HybridAgent early-stop (resultado medido)
+- 112 tensores LoRA carregados com validacao; 6 prompts, ate 256 tokens,
+  contagem ate `<answer>`: latente 123,3 vs texto 133,3 tokens (-7,5%),
+  tokens efetivos/s 18,47 vs 20,39 (sem speedup). Commit a3b47a2f.
+- Corrigido bug do avaliador que primeiro mediu com 0 adapters (falso negativo).
