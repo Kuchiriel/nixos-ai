@@ -231,6 +231,45 @@ def ocr_text(image_path, langs=("por+eng", "eng"), psms=("11", "6", "3"),
     return best, ""
 
 
+class DuplexVoice:
+    """Le as transcricoes NOVAS do log do cliente de voz.
+
+    (23/11) O mesmo mecanismo do uhrs-practice.py: mede a posicao do
+    arquivo (bytes) e devolve so o que apareceu depois — assim o loop nao
+    re-corrige a mesma resposta e o dono so FALA.
+
+    O log e' do dia (logs/duplex/<AAAA-MM-DD>.log) e a marca e' 'SEGMENTO:'.
+    """
+
+    def __init__(self, log_path):
+        self.path = Path(log_path)
+        self.pos = self.path.stat().st_size if self.path.is_file() else 0
+
+    def poll(self):
+        """Devolve a transcricao mais recente que ainda nao foi lida."""
+        if not self.path.is_file():
+            return ""
+        size = self.path.stat().st_size
+        if size < self.pos:            # rotacionou/truncou
+            self.pos = 0
+        if size == self.pos:
+            return ""
+        with self.path.open("r", encoding="utf-8", errors="ignore") as fh:
+            fh.seek(self.pos)
+            chunk = fh.read()
+            self.pos = size
+        last = ""
+        for line in chunk.splitlines():
+            if "SEGMENTO:" in line:
+                last = line.split("SEGMENTO:", 1)[1].strip()
+        return last
+
+
+def _norm(s):
+    return " ".join(str(s or "").lower().replace(".", " ").replace(",", " ")
+                     .split())
+
+
 def read_item_text(timeout=45.0, window_title=None, prefer_clipboard=True):
     """O texto do item. Devolve (texto, origem, caminho_da_imagem, erro).
 
@@ -272,7 +311,7 @@ def item_id_de(context):
 
 
 def write_label(context, answer, source="uhrs-capture", item_id=None,
-                path=None):
+                path=None, via="tela"):
     """Grava a label no schema: contexto = o que o dono viu, answer = o que
     ele respondeu. NUNCA o gabarito.
 
@@ -292,7 +331,7 @@ def write_label(context, answer, source="uhrs-capture", item_id=None,
         # item real), entao e' nulo.
         "key": None,
         "source": source,
-        "via": "tela",
+        "via": via,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     with target.open("a", encoding="utf-8") as fh:
@@ -388,6 +427,11 @@ def main():
                          "texto exato, sem OCR")
     ap.add_argument("--no-clipboard", action="store_true",
                     help="ignora o clipboard e usa o OCR da janela")
+    ap.add_argument("--from-duplex", action="store_true",
+                    help="o veredito vem da VOZ (transcricao nova do log do "
+                         "cliente de voz): sem digitar nada")
+    ap.add_argument("--duplex-log", default="",
+                    help="log do cliente de voz (default: logs/duplex/<hoje>.log)")
     args = ap.parse_args()
 
     if args.self_test:
@@ -427,14 +471,39 @@ def main():
         print("cancelado: nada gravado.")
         return 1
 
-    ans_raw = input("fale o veredito (3 highly / 2 moderately / 1 slightly / "
-                    "0 not): ").strip()
+    ans_raw = ""
+    if args.from_duplex:
+        # (23/11) o veredito FALADO: o mesmo leitor do uhrs-practice (o log
+        # do cliente de voz, marca 'SEGMENTO:'). O dono so fala ("muito
+        # relevante", "2"); o loop avanca sozinho, sem digitar nada.
+        log_path = args.duplex_log or str(
+            REPO / "logs" / "duplex" / (time.strftime("%Y-%m-%d") + ".log"))
+        voice = DuplexVoice(log_path)
+        print(f"modo voz: fale o veredito (log: {log_path}). "
+              f"'proxima' pula o item, 'de novo' repete.")
+        while True:
+            time.sleep(1.5)
+            ans_raw = voice.poll()
+            if not ans_raw:
+                continue
+            low = _norm(ans_raw)
+            if "proxima" in low or "pular" in low or "next" in low:
+                print("  (pulando)")
+                return 0
+            if "de novo" in low or "repetir" in low or "again" in low:
+                print("(repetindo o item)")
+                continue
+            break
+    else:
+        ans_raw = input("fale o veredito (3 highly / 2 moderately / 1 slightly / "
+                        "0 not): ").strip()
     ans = parse_answer(ans_raw)
     if ans is None:
         print(f"nao entendi '{ans_raw}'; nada gravado.")
         return 1
 
     target, row = write_label(text, ans, source=args.source,
+                               via=("voz" if args.from_duplex else "teclado"),
                                path=Path(args.labels) if args.labels else None)
     print(f"label gravada: id={row['id']} answer={ans} -> {target}")
     return 0
