@@ -771,3 +771,8 @@ Estado MEDIDO agora:
   saiu de 0/6. Tok/s 42,41 vs 42,58 (sem ganho de velocidade; ambos no teto).
 - Commit 98169a49; detalhes em ai-mesh/docs/hybridagent-poc-2026-11-23.md.
 - Servicos GPU restaurados apos takeover; heal iniciado manualmente.
+
+## 23/11 — A/B valido do MTP
+- Mesmo GGUF/LoRA/flags, so --spec-type muda: draft-mtp 77,88 tok/s e 0,822s
+  vs none 54,22 tok/s e 1,162s; aceite 311/559 (55,6%). Ganho +43,6% vazao
+  e -29,3% latencia. Commit 0451cb37; servicos restaurados.
