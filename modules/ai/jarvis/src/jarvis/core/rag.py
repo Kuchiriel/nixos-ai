@@ -801,9 +801,15 @@ class HybridIndexer:
         rich_list = [build_rich_content(path, facts if i == 0 else [], chunk, max_chars=chunk_size)
                      for i, chunk in enumerate(chunks)]
         # Route by content: ~/Books → books collection; resto → code_index
-        target_collection = ("books" if path.startswith(
-            str(Path.home() / "Books")) else
-            self._cfg.qdrant_collection_code)
+        # (24/11, medido) o roteamento por ~/Books era HARDCODED e ignorava
+        # qdrant_collection_code: um teste com coleção isolada escreveu em
+        # `books` (produção). Route to books apenas quando a config NÃO foi
+        # explicitamente substituída — testes isolados devem permanecer isolados.
+        default_code = str(Path.home() / "projects" / "nixos-ai")
+        configured = getattr(self._cfg, "qdrant_collection_code", "code_index")
+        route_to_books = path.startswith(str(Path.home() / "Books"))
+        target_collection = ("books" if route_to_books and configured == "code_index"
+                             else configured)
         # sha do fonte UMA vez por arquivo (medido 19/11: ficava dentro do
         # loop de chunks e relia o arquivo inteiro a cada chunk).
         import hashlib as _hl
