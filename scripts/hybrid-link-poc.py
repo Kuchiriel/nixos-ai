@@ -200,6 +200,7 @@ def main() -> int:
     ap.add_argument("--latent-steps", type=int, default=2)
     ap.add_argument("--eval", type=int, default=5)
     ap.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    ap.add_argument("--max-new", type=int, default=64)
     ap.add_argument("--hybrid-sft", action="store_true",
                     help="CE auxiliar de leitura nos spans <latent>")
     ap.add_argument("--out", type=Path, default=Path("/home/nixos/work/hybrid/poc"))
@@ -221,8 +222,8 @@ def main() -> int:
                         lr=2e-4, hybrid_sft=a.hybrid_sft)
     ev = []
     for row in data[a.eval * -1:]:
-        gen, n, el = generate(model, tok, link, row["question"], a.latent_steps)
-        txt, nt, et = generate_text(model, tok, row["question"])
+        gen, n, el = generate(model, tok, link, row["question"], a.latent_steps, a.max_new)
+        txt, nt, et = generate_text(model, tok, row["question"], a.max_new)
         baseline_words = len(re.findall(r"\S+", row["latent"] + " " + row["visible"]))
         ev.append({"answer": row["answer"], "latent_tokens": n,
                    "latent_seconds": round(el, 3), "latent_tok_s": round(n / el, 2) if el else 0,
