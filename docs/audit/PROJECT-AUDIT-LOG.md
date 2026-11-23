@@ -1652,3 +1652,8 @@
 - Fix com helper + teste (10/10). Repush bloqueado por 2 sessoes GPU ativas.
 - Nenhum cancelamento ou delete; jobs v4/v5 preservados.
 - Proximo: nova tentativa de push quando ITQ v1 liberar a vaga.
+
+### 2026-11-23 — desobstrução Kaggle
+- 2 jobs quebrados backupeados (sha) e removidos para liberar vagas GPU.
+- baseline v6 RUNNING / ITQ v1 QUEUED com scripts corrigidos.
+- Proximo: baixar outputs quando COMPLETE e validar 7 gates.

@@ -694,3 +694,12 @@ Estado MEDIDO agora:
   (sessao ERROR + ITQ v1 QUEUED ocupam as 2 vagas). API de cancelamento
   tentada nas rotas oficiais -> 404 nesta conta; nada cancelado/apagado.
 - Proximo: repetir push quando uma vaga GPU liberar. Gap segue aberto.
+
+## 23/11 — jobs corretos no ar (desobstrução GPU)
+- Limite de 2 sessoes GPU bloqueava o repush. Identificados 2 jobs quebrados
+  e sem output util: orfao `...-itq` (env LB_VARIANT errado) e ITQ v1
+  (v[name]). Ambos tiveram codigo baixado com sha antes da remocao
+  (89ffa269 e 16c4225f) e foram removidos com confirmacao explicita.
+- Jobs substituidos: baseline **v6 RUNNING** e ITQ **v1 QUEUED**, ambos com
+  script gerado por kaggle-split-kernels.py (seqlen 2048, sem NameError).
+- Gap segue aberto ate COMPLETE/downlo/validacao 7/7 dos dois.
