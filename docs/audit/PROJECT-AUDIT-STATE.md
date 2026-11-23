@@ -790,3 +790,10 @@ Estado MEDIDO agora:
   contagem ate `<answer>`: latente 123,3 vs texto 133,3 tokens (-7,5%),
   tokens efetivos/s 18,47 vs 20,39 (sem speedup). Commit a3b47a2f.
 - Corrigido bug do avaliador que primeiro mediu com 0 adapters (falso negativo).
+
+## 24/11 — RPC capacidade (limite real)
+- Phi-4-mini 2,4GiB transferido ao celular (disco 21GiB livre, RAM 800MiB):
+  segfault rc=139 local, com --rpc e com --load-mode none. RPC so distribui
+  compute; o cliente ainda precisa mmap do GGUF. Controle 93MB OK (62,4 t/s).
+- Gap de capacidade documentado; alternativa futura: llama-server no host +
+  cliente HTTP. Servidor RPC transitorio encerrado.
