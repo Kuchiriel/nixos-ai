@@ -116,9 +116,13 @@ release() {
     local i
     for i in $(seq 1 20); do [ "$(livre)" -ge 800 ] && break; sleep 1; done
     if [ "$(cat "$STATE/residente-estava" 2>/dev/null || echo 1)" = "1" ]; then
+        # (23/11, medido) o release apos takeover deixou a unit em
+        # start-limit-hit: resetar ANTES de start evita VRAM ociosa.
+        sudo -n systemctl reset-failed "$RES_UNIT_SYS" 2>/dev/null || true
         sudo -n systemctl start "$RES_UNIT_SYS" 2>/dev/null             || systemctl start "$RES_UNIT_SYS" 2>/dev/null             || echo "  AVISO: nao consegui voltar $RES_UNIT_SYS" >&2
     fi
     if [ "$(cat "$STATE/duplex-estava" 2>/dev/null || echo 1)" = "1" ]; then
+        systemctl --user reset-failed "$RES_UNIT_USR" 2>/dev/null || true
         systemctl --user start "$RES_UNIT_USR" 2>/dev/null || true
     fi
     systemctl --user start jarvis-heal.service 2>/dev/null || true

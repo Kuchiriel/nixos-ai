@@ -61,8 +61,8 @@ class LoRALinear(nn.Module):
         self.base.weight.requires_grad_(False)
         if self.base.bias is not None:
             self.base.bias.requires_grad_(False)
-        self.A = nn.Parameter((torch.randn(r, base.in_features) * 0.01).to(base.weight.dtype))
-        self.B = nn.Parameter(torch.zeros(base.out_features, r, dtype=base.weight.dtype))
+        self.A = nn.Parameter((torch.randn(r, base.in_features) * 0.01).to(base.weight.device, base.weight.dtype))
+        self.B = nn.Parameter(torch.zeros(base.out_features, r, device=base.weight.device, dtype=base.weight.dtype))
         self.scale = alpha / r
 
     def forward(self, x):
@@ -91,8 +91,8 @@ def train(model, tok, link, data, steps: int, k: int, lr: float):
         row = data[i % len(data)]
         prompt = "Q: " + row["question"] + "\nThink:\n"
         target = row["visible"] + "\nAnswer: " + row["answer"]
-        ids = tok(prompt, return_tensors="pt", truncation=True, max_length=48).input_ids
-        tgt = tok(target, return_tensors="pt", truncation=True, max_length=48).input_ids
+        ids = tok(prompt, return_tensors="pt", truncation=True, max_length=48).input_ids.to(model.device)
+        tgt = tok(target, return_tensors="pt", truncation=True, max_length=48).input_ids.to(model.device)
         emb = model.get_input_embeddings()(ids)
         out = model(inputs_embeds=emb, use_cache=False)
         h = out.hidden_states[-1][:, -1, :]
@@ -115,7 +115,7 @@ def train(model, tok, link, data, steps: int, k: int, lr: float):
 @torch.no_grad()
 def generate(model, tok, link, question: str, k: int, max_new: int = 32) -> tuple[str, int]:
     model.eval(); link.eval()
-    ids = tok("Q: " + question + "\nThink:\n", return_tensors="pt").input_ids
+    ids = tok("Q: " + question + "\nThink:\n", return_tensors="pt").input_ids.to(model.device)
     emb = model.get_input_embeddings()(ids)
     out = model(inputs_embeds=emb, use_cache=False)
     seq = emb
@@ -143,6 +143,7 @@ def main() -> int:
     ap.add_argument("--steps", type=int, default=20)
     ap.add_argument("--latent-steps", type=int, default=2)
     ap.add_argument("--eval", type=int, default=5)
+    ap.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
     ap.add_argument("--out", type=Path, default=Path("/home/nixos/work/hybrid/poc"))
     a = ap.parse_args()
     torch.set_num_threads(min(12, os.cpu_count() or 4))
@@ -150,11 +151,13 @@ def main() -> int:
     data = rows(a.rows, a.out / "rows.json")
     print(json.dumps({"rows_loaded": len(data), "seconds": round(time.time()-t0, 1)}), flush=True)
     tok = AutoTokenizer.from_pretrained(MODEL)
-    model = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=torch.float32, output_hidden_states=True)
+    dev = a.device if a.device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
+    dtype = torch.bfloat16 if dev == "cuda" else torch.float32
+    model = AutoModelForCausalLM.from_pretrained(MODEL, dtype=dtype, output_hidden_states=True).to(dev)
     model.config.use_cache = False
     install_lora(model)
     hidden = model.get_input_embeddings().embedding_dim
-    link = nn.Linear(hidden, hidden, bias=False, dtype=model.dtype)
+    link = nn.Linear(hidden, hidden, bias=False, dtype=model.dtype).to(dev)
     losses = train(model, tok, link, data, a.steps, a.latent_steps, lr=2e-4)
     ev = []
     for row in data[a.eval * -1:]:
@@ -165,7 +168,7 @@ def main() -> int:
                    "hit": row["answer"].lower()[:12] in gen.lower(),
                    "sample": gen[:120]})
     report = {"paper": "arXiv 2610.18861", "model": MODEL, "train_rows": min(a.rows, len(data)),
-              "steps": a.steps, "latent_steps": a.latent_steps,
+              "steps": a.steps, "latent_steps": a.latent_steps, "device": str(dev),
               "train_loss_first_last": [losses[0], losses[-1]],
               "eval": ev,
               "mean_generated_tokens": round(sum(x["generated_tokens"] for x in ev)/len(ev), 2),
