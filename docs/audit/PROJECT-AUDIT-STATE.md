@@ -682,3 +682,15 @@ Estado MEDIDO agora:
   erro de limite de 2 sessoes GPU; nenhum job cancelado.
 - Validacao final agora exige agregar os dois outputs e rodar o validador
   dos 7 gates. Gap segue aberto. Runbook atualizado no ai-mesh.
+
+## 23/11 — kernel baseline v5 ERROR (NameError) e bloqueio GPU
+
+- v5 falhou em ~1 min: `NameError: name name is not defined` no log do
+  seletor de variante. Corrigido com `log_selected_variants()` + teste de
+  regressao (contrato 10/10, commits d7a032b0/9685cf36). Nenhum treino
+  desperdicado; checkpoints do v4 preservados.
+- Gerador regenerou os 2 jobs (script sem v[name], py_compile OK), mas o
+  repush falhou 4x com "Maximum batch GPU session count of 2 reached"
+  (sessao ERROR + ITQ v1 QUEUED ocupam as 2 vagas). API de cancelamento
+  tentada nas rotas oficiais -> 404 nesta conta; nada cancelado/apagado.
+- Proximo: repetir push quando uma vaga GPU liberar. Gap segue aberto.

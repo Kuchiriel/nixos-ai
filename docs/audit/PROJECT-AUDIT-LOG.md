@@ -1647,3 +1647,8 @@
 - Duas variantes nao cabem em 12h: separadas em 2 kernels via gerador.
 - baseline v5 RUNNING / ITQ v1 QUEUED. Contrato 9/9 testes.
 - Proximo: aguardar COMPLETE dos dois, baixar outputs, agregar e validar 7/7.
+
+### 2026-11-23 — v5 NameError e limite de sessoes GPU
+- Fix com helper + teste (10/10). Repush bloqueado por 2 sessoes GPU ativas.
+- Nenhum cancelamento ou delete; jobs v4/v5 preservados.
+- Proximo: nova tentativa de push quando ITQ v1 liberar a vaga.
