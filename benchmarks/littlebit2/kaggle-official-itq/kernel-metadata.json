@@ -1,6 +1,6 @@
 {
-  "id": "kuchiriel/littlebit2-official-qat-5epoch-qwen3-0-6b-littlebit2",
-  "title": "LittleBit2 Official QAT 5epoch Qwen3 0 6B LittleBit2",
+  "id": "kuchiriel/littlebit2-official-qat-5epoch-qwen3-0-6b-itq",
+  "title": "LittleBit2 Official QAT 5epoch Qwen3 0 6B ITQ",
   "code_file": "script_littlebit2.py",
   "language": "python",
   "kernel_type": "script",

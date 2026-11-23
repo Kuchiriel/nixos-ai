@@ -40,7 +40,7 @@ Causa: `eval.py` autodetecta `seqlen` pelo `max_position_embeddings=40960` do Qw
 - o contrato passa a fixar `evaluation.ppl_seqlen=2048`;
 - `official_ppl` passa `--seqlen 2048` ao `eval.py` oficial;
 - `LB_VARIANT` permite executar baseline ou LittleBit-2 isoladamente, pois cada variante mediu cerca de 8h e o par sequencial excede a sessão Kaggle de 12h;
-- novo kernel `kuchiriel/littlebit2-official-qat-5epoch-qwen3-0-6b-littlebit2` executa somente a variante LittleBit-2;
+- novo kernel `kuchiriel/littlebit2-official-qat-5epoch-qwen3-0-6b-itq` executa somente a variante LittleBit-2;
 - o baseline já concluído foi preservado para avaliação separada, sem repetir 8h de treino.
 
 ## Testes
