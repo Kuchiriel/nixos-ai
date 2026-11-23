@@ -17,7 +17,24 @@ def sha(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else ""
 
 
-def aggregate(sources: list[Path], out: Path) -> dict:
+def decode_kaggle_log(path: Path) -> str:
+    """Kaggle .log e JSONL com campo data; devolve texto corrido."""
+    raw = path.read_text(encoding="utf-8", errors="ignore")
+    chunks = []
+    for line in raw.splitlines():
+        line = line.strip().lstrip("[").lstrip(",").rstrip("]")
+        if not line.startswith("{"):
+            continue
+        try:
+            event = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(event, dict) and "data" in event:
+            chunks.append(str(event["data"]))
+    return "\n".join(chunks) if chunks else raw
+
+
+def aggregate(sources: list[Path], out: Path, logs: list[Path] | None = None) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     merged = {"schema": 1, "production_writes": False,
               "official_commit": "42d658b0c79f76450b34b6a3547462c7cdc3e1a0",
@@ -45,6 +62,11 @@ def aggregate(sources: list[Path], out: Path) -> dict:
             dst = out / name
             shutil.copytree(d, dst, dirs_exist_ok=True)
             manifest["copied"][name] = {"files": len(list(dst.rglob("*")))}
+    if logs:
+        combined = "\n".join(decode_kaggle_log(p) for p in logs if p.is_file())
+        (out / "combined-kernel.log").write_text(combined, encoding="utf-8")
+        manifest["combined_log"] = {"files": [str(p) for p in logs],
+                                    "bytes": len(combined.encode("utf-8"))}
     (out / "results.json").write_text(
         json.dumps(merged, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     manifest["variants_merged"] = sorted(merged["variants"])
@@ -58,8 +80,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("sources", nargs="+", type=Path)
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--log", type=Path, action="append", default=[],
+                    help="log .log do Kaggle (pode repetir; decodifica JSONL)")
     a = ap.parse_args()
-    print(json.dumps(aggregate(a.sources, a.out), indent=2, ensure_ascii=False))
+    print(json.dumps(aggregate(a.sources, a.out, a.log), indent=2, ensure_ascii=False))
     return 0
 
 if __name__ == "__main__":
