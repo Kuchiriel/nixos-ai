@@ -755,3 +755,12 @@ Estado MEDIDO agora:
   mal extraida (corrigido) e depois timeout >120s com /health=200 — bloqueio
   externo. Nao e A/B valido para isolar MTP; registrado como tal.
 - Script a06b3039, artefato ~/work/hybrid/mtp-ab-report.json.
+
+## 23/11 — RPC distribuido (parcial)
+- Modelo SmolLM2-135M Q3_K_M (93.510.208 bytes, sha 3e8e1ce1...) presente
+  nos dois hosts; servidores RPC v10.0.2 compilados e TCP testado via LAN.
+- Cliente llama-cli do Termux nao registra backend RPC (backend_ptrs=1)
+  mesmo com GGML_RPC=ON, GGML_BACKEND_DL=ON, LLAMA_ARG_RPC e
+  GGML_BACKEND_PATH; servidores temporarios encerrados por PID.
+- Baseline celular 33,4 t/s (32 tokens); numeros com --rpc (41-46 t/s)
+  NAO sao evidencia de distribuicao. Prova pendente.
