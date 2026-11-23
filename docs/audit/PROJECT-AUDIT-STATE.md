@@ -729,3 +729,13 @@ Estado MEDIDO agora:
   em ai-mesh/docs/hybridagent-poc-2026-11-23.md.
 - Fila auto-wake ampliada com 3 experimentos: HybridSFT completo, A/B MTP
   8092 vs 8095 e RPC do llama.cpp (binario rpc-server ausente no host).
+
+## 23/11 — GPU ociosa usada e RPC instalado nos hosts
+- GPU 8092 medida ociosa; takeover/release usados para PoC HybridAgent em
+  CUDA (200 passos/32s, loss 2,08->0,54, acerto 0/5). Bug do release
+  (start-limit-hit) corrigido em d0281554; servicos restaurados.
+- `llama-rpc-server` (alvo oficial ggml-rpc-server) compilado em Linux e
+  Termux com GGML_RPC=ON, wrappers em ~/bin, portas 50052/50053 testadas.
+  Windows segue bloqueado (sem acesso ao peer). Declarado nos manifests;
+  manifest-check --parity 0 divergencias. Receita em
+  ai-mesh/docs/llama-rpc-stack-2026-11-23.md.

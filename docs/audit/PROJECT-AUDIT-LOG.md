@@ -1667,3 +1667,7 @@
 - Paper/repo/HF verificados; PoC do mecanismo em 0.6B com LoRA: loss caiu,
   reduction de tokens ~3.6x, acerto 0/5 (honesto).
 - 3 tarefas enfileiradas para usar CPU/GPU livre: HybridSFT, A/B MTP, RPC.
+
+### 2026-11-23 — GPU e RPC
+- PoC CUDA com GPU liberada; release corrigido (reset-failed).
+- RPC compilado/declarado em Linux+Termux; Windows pendente do dono.
