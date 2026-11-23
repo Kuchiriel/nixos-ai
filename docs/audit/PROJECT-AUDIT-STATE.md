@@ -747,3 +747,11 @@ Estado MEDIDO agora:
 - Limitacoes medidas: poucos passos, Qwen3-0.6B sem ferramentas de busca do
   dataset e teto de 64 tokens. Commit 21b5d5aa; detalhes no doc do ai-mesh.
 - Servicos restaurados apos takeover; release agora espera o heal ficar ativo.
+
+## 23/11 — bench MTP (parcial)
+- Heldout fixo de 8 prompts: 8092 local 77,75 tok/s / 0,902 s (64 tokens),
+  aceite de draft MTP 311/559 = 55,6%. Sem trocar modelos ou reiniciar servicos.
+- 8095 e nv-gate para NIM remoto (modelo diferente): 401 por credencial JSON
+  mal extraida (corrigido) e depois timeout >120s com /health=200 — bloqueio
+  externo. Nao e A/B valido para isolar MTP; registrado como tal.
+- Script a06b3039, artefato ~/work/hybrid/mtp-ab-report.json.
