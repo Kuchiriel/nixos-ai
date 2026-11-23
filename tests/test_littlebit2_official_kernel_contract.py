@@ -180,6 +180,21 @@ class LittleBit2OfficialKernelContractTests(unittest.TestCase):
         self.assertEqual(str(module.PROTOCOL["sequence_length"]),
                          calls[0][calls[0].index("--seqlen") + 1])
 
+    def test_selected_variants_log_has_no_undefined_name(self):
+        script_path = KERNEL / "script.py"
+        spec = importlib.util.spec_from_loader(
+            "littlebit2_official_kernel_variant_log",
+            SourceFileLoader("littlebit2_official_kernel_variant_log", str(script_path)),
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        msg = module.log_selected_variants(self.contract["variants"], "baseline")
+        self.assertIn("baseline", msg)
+        self.assertIn("littlebit2", msg)
+        self.assertEqual("selected_variants=[\"baseline\", \"littlebit2\"] selector=baseline", msg)
+        src = script_path.read_text(encoding="utf-8")
+        self.assertNotIn("v[name]", src)
+
     def test_variant_selector_supports_single_session_runs(self):
         script_path = KERNEL / "script.py"
         spec = importlib.util.spec_from_loader(

@@ -314,6 +314,12 @@ print("LITTLEBIT_DECODE",json.dumps({"elapsed_seconds":elapsed,"generated_tokens
     return result
 
 
+def log_selected_variants(variants: list[dict], selector: str) -> str:
+    """Mensagem de selecao — isolada para teste (evita NameError em f-string)."""
+    return "selected_variants=%s selector=%s" % (
+        [v.get("name") for v in variants], selector)
+
+
 def selected_variants(variants: list[dict], selector: str) -> list[dict]:
     """Permite dividir as variantes em sessoes Kaggle separadas (limite 12h)."""
     if selector in ("all", ""):
@@ -357,7 +363,7 @@ def main() -> int:
 =======
     selector = os.environ.get("LITTLEBIT2_VARIANT", "all")
     variants = selected_variants(CONTRACT["variants"], selector)
-    log(f"selected_variants={[v[name] for v in variants]} selector={selector}")
+    log(log_selected_variants(variants, selector))
     for variant in variants:
 >>>>>>> 7d901c4c (fix(littlebit2): pass contract seqlen to PPL and allow split variant sessions)
         path = train_variant(variant)
