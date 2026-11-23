@@ -764,3 +764,10 @@ Estado MEDIDO agora:
   GGML_BACKEND_PATH; servidores temporarios encerrados por PID.
 - Baseline celular 33,4 t/s (32 tokens); numeros com --rpc (41-46 t/s)
   NAO sao evidencia de distribuicao. Prova pendente.
+
+## 23/11 — HybridAgent PoC final (resultado positivo parcial)
+- 173 amostras respondíveis, 2000 passos, HybridSFT, teto 256: loss 9,31->0,13
+  e aux 14,38->0,0018. Acerto latente 2/6 (33,3%) vs texto 1/6 (16,7%) —
+  saiu de 0/6. Tok/s 42,41 vs 42,58 (sem ganho de velocidade; ambos no teto).
+- Commit 98169a49; detalhes em ai-mesh/docs/hybridagent-poc-2026-11-23.md.
+- Servicos GPU restaurados apos takeover; heal iniciado manualmente.
