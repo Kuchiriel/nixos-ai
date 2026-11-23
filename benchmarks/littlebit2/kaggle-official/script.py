@@ -266,14 +266,18 @@ def official_ppl(path: Path) -> float:
     return float(match.group(1))
 
 
-def decode_latency(path: Path) -> dict:
-    code = r'''
-import json,time,torch
+def decode_latency_code(path: str, warmup: int, tokens: int) -> str:
+    """Codigo Python do subprocesso, com literais escapados por %r (22/11 medido).
+
+    A versao anterior concatenava r'''+json.dumps(...)+r''', o que fechou
+    a string no meio e gerou SyntaxError: '(' was never closed no job v6.
+    """
+    return """import json,time,torch
 from quantization.hub import LittleBitModel
 from utils.datautils import load_tokenizer
-path=json.loads(r''' + json.dumps(str(path)) + r''')
-warmup=int(json.loads(r''' + json.dumps(str(EVALUATION["decode_warmup_tokens"])) + r''')
-tokens=int(json.loads(r''' + json.dumps(str(EVALUATION["decode_max_new_tokens"])) + r'''))
+path=%r
+warmup=%r
+tokens=%r
 model=LittleBitModel.from_pretrained(path, torch_dtype=torch.bfloat16, device="auto")
 tok=load_tokenizer(path)
 device=next(model.parameters()).device
@@ -288,7 +292,14 @@ with torch.inference_mode():
     elapsed=time.perf_counter()-started
 generated=int(out.shape[-1]-ids.shape[-1])
 print("LITTLEBIT_DECODE",json.dumps({"elapsed_seconds":elapsed,"generated_tokens":generated,"tokens_per_second":generated/elapsed if elapsed else 0,"device":str(device)}))
-'''
+""" % (path, warmup, tokens)
+
+
+def decode_latency(path: Path) -> dict:
+    code = decode_latency_code(str(path),
+                               EVALUATION["decode_warmup_tokens"],
+                               EVALUATION["decode_max_new_tokens"])
+    compile(code, "<decode_latency>", "exec")  # falha aqui, nao dentro do job
     raw = run([sys.executable, "-c", code], cwd=REPO, capture=True)
     match = re.search(r"LITTLEBIT_DECODE\s+(\{.*\})", raw)
     if not match:
