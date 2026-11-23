@@ -808,3 +808,16 @@ Estado MEDIDO agora:
   (id explicito). Colecao jarvis_test_frontier_2026_11 agora com 400 pontos;
   retrieval por pergunta conhecida validou BitNet (2410.16144) e CURE.
 - Testes: regressao 2/2 e suíte completa 2126 passed / 0 failed / 27 skipped.
+
+## 24/11 — varredura de worktrees e serviços (somente leitura + 1 restauração)
+- 13 worktrees: 12 limpos, 1 (`nixos-ai-littlebit2-preflight`) com 3 arquivos
+  untracked. Medido por hash: 2 divergem do main, mas o worktree é MAIS ANTIGO
+  (main já contém a correção `_venv_lib_path` e a nota correspondente).
+  Nada foi podado: não há conteúdo novo a recuperar e a poda exigiria decisão.
+- 10 branches ainda abertos vs origin/main (apenas 2 mesclados); worktrees
+  preservados. Nenhuma mudança de outra lane foi sobrescrita.
+- `duplex-voice.service` estava failed desde 10:50Z porque nosso takeover de
+  GPU parou o 8092; restaurado com `reset-failed` + `start`: active,
+  8092=200 e 8097=200.
+- MCPs duplicados (8765/8766, v4/v6) são intencionais para a frota; o config
+  do opencode usa MCP local (`jarvis-mcp-launcher.sh`), não os HTTP.
