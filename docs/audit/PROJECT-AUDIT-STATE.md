@@ -797,3 +797,14 @@ Estado MEDIDO agora:
   compute; o cliente ainda precisa mmap do GGUF. Controle 93MB OK (62,4 t/s).
 - Gap de capacidade documentado; alternativa futura: llama-server no host +
   cliente HTTP. Servidor RPC transitorio encerrado.
+
+## 24/11 — frente fronteira: papers, repos e RAG
+- Papers salvos em ~/Books/papers/frontier-2026-11-23 (9 PDFs, 23MB, INDEX.md)
+  e repos clonados em ~/projects: BitNet, LACUNA, llm.c, build-nanogpt,
+  HybridAgent. Temas: self-rewriting weights (2611.21885), CURE ACL 2026,
+  In-Place TTT, Lacuna, BitNet b1.58, Bonsai, HybridAgent, agent memory.
+- Corrigido bug P0 do HybridIndexer: roteamento hardcoded ~/Books->books
+  ignorava collection isolada; ponto indevido em books removido com manifesto
+  (id explicito). Colecao jarvis_test_frontier_2026_11 agora com 400 pontos;
+  retrieval por pergunta conhecida validou BitNet (2410.16144) e CURE.
+- Testes: regressao 2/2 e suíte completa 2126 passed / 0 failed / 27 skipped.
