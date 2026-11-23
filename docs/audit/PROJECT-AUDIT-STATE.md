@@ -739,3 +739,11 @@ Estado MEDIDO agora:
   Windows segue bloqueado (sem acesso ao peer). Declarado nos manifests;
   manifest-check --parity 0 divergencias. Receita em
   ai-mesh/docs/llama-rpc-stack-2026-11-23.md.
+
+## 23/11 — HybridSFT estendido (resultado negativo honesto)
+- 237 amostras, 200 passos, loss auxiliar nos spans latentes: total 8,19->4,75,
+  aux 11,94->4,94. Acerto final 0/6 tanto no modo latente quanto no texto.
+  Tokens/s: latente 51,02 vs texto 53,23 (sem ganho de velocidade neste PoC).
+- Limitacoes medidas: poucos passos, Qwen3-0.6B sem ferramentas de busca do
+  dataset e teto de 64 tokens. Commit 21b5d5aa; detalhes no doc do ai-mesh.
+- Servicos restaurados apos takeover; release agora espera o heal ficar ativo.
