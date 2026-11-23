@@ -717,3 +717,15 @@ Estado MEDIDO agora:
   com evidencia correta, sem falso positivo.
 - Proximo: quando os dois jobs ficarem COMPLETE, rodar o agregador e o
   littlebit2-validate --strict; so entao fechar o gap.
+
+## 23/11 — HybridAgent: paper verificado e PoC do mecanismo
+- Fontes primarias verificadas: arXiv 2610.18861, repo togethercomputer/HybridAgent,
+  collection HF (modelos 8B/14B **nao usados**) e dataset HybridSFT-v2.
+- PoC local em Qwen3-0.6B CPU: HybridLink (hidden->embedding) + LoRA manual r=4
+  em q/v, 92 amostras reais com spans <latent>. Medido: loss 2,0985->0,8493;
+  32 tokens gerados vs 114,2 palavras de pensamento textual (~3,6x);
+  acerto final 0/5 — mecanismo provado, qualidade ainda nao.
+- Scripts commitados (2fb516a3); analise comparativa com LittleBit2/MTP/RPC
+  em ai-mesh/docs/hybridagent-poc-2026-11-23.md.
+- Fila auto-wake ampliada com 3 experimentos: HybridSFT completo, A/B MTP
+  8092 vs 8095 e RPC do llama.cpp (binario rpc-server ausente no host).

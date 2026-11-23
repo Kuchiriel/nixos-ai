@@ -1662,3 +1662,8 @@
 - Rebase resolvido e 23 commits enviados ao GitHub (HEAD dc68b1c6).
 - Agregador de outputs + logs com 4 testes; validador provado no output v4.
 - Proximo: agregar/validar quando os dois kernels terminarem.
+
+### 2026-11-23 — HybridAgent PoC
+- Paper/repo/HF verificados; PoC do mecanismo em 0.6B com LoRA: loss caiu,
+  reduction de tokens ~3.6x, acerto 0/5 (honesto).
+- 3 tarefas enfileiradas para usar CPU/GPU livre: HybridSFT, A/B MTP, RPC.
