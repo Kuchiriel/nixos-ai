@@ -44,7 +44,7 @@ class Attn(nn.Module):
 
     def forward(self, x, mask=None):
         b, t, d = x.shape
-        call = getattr(self, "_use_call", False)
+        call = isinstance(self.q, nn.Module)  # SpecLinear/LoRALinear
         q = (self.q(x) if call else x @ self.q).view(b, t, self.h, self.dh).transpose(1, 2)
         k = (x @ self.k).view(b, t, self.h, self.dh).transpose(1, 2)
         v = (self.v(x) if call else x @ self.v).view(b, t, self.h, self.dh).transpose(1, 2)
@@ -89,12 +89,24 @@ class LoRALinear(nn.Module):
         return x @ self.base + (x @ self.A.T) @ self.B.T * self.alpha
 
 
+class SpecLinear(nn.Module):
+    """W^(l) = W + DeltaW^(l) — Meta 2610.40325 sec 2.2."""
+    def __init__(self, w: nn.Parameter, r=8):
+        super().__init__()
+        self.register_buffer("base", w.detach().clone())
+        self.A = nn.Parameter(torch.randn(r, w.shape[0]) * 0.01)
+        self.B = nn.Parameter(torch.zeros(w.shape[1], r))
+
+    def forward(self, x):
+        return x @ self.base + (x @ self.A.T) @ self.B.T
+
+
 class ScaleLM(nn.Module):
     """input(2) + recurrent(4) + output(2) blocos; variantes ligam u+L2 e/ou LoRA."""
     def __init__(self, vocab, d, variant):
         super().__init__()
         self.d, self.variant = d, variant
-        self.scale_in = variant in ("loop_full", "ngpt_only")
+        self.scale_in = variant in ("loop_full", "ngpt_only", "loop_spec")
         self.tok = nn.Embedding(vocab, d)
         self.pos = nn.Embedding(256, d)
         n_in, n_rec, n_out = 2, 4, 2
@@ -105,6 +117,21 @@ class ScaleLM(nn.Module):
         self.blocks = nn.ModuleList([Block(d, heads, self.scale_in) for _ in range(n_in+n_rec+n_out)])
         self.ln = nn.LayerNorm(d)
         self.head = nn.Linear(d, vocab)
+        if variant == "loop_spec":
+            # Meta 2610.40325 sec 2.2: W^(l) = W + DeltaW^(l), com adapters
+            # LOOP-ESPECIFICOS (cada passo do bloco recorrente tem os seus).
+            for bi in range(n_in, n_in + n_rec):
+                blk = self.blocks[bi]
+                blk.att._spec_adapters = {}
+                for attr in ("q", "v"):
+                    W = getattr(blk.att, attr)
+                    for l in range(4):
+                        r = 8
+                        # registrar como atributos do MODULO: dict Python
+                        # comum NAO registra Parameter -> .to(device) nao move
+                        mod = SpecLinear(W, r)
+                        setattr(blk.att, f"_spec_{attr}_{l}", mod)
+                        blk.att._spec_adapters[(attr, l)] = mod
         if variant == "ngpt_only":
             pass  # so a normalizacao nGPT/L2, sem LoRA
         if variant == "frozen_qv":
@@ -119,7 +146,6 @@ class ScaleLM(nn.Module):
                     # (object.__setattr__ NAO registra -> .to(device) nao move)
                     del blk.att._parameters[attr]
                     setattr(blk.att, attr, LoRALinear(w))
-                blk.att._use_call = True
 
     def forward(self, x):
         t = x.shape[1]
@@ -127,9 +153,27 @@ class ScaleLM(nn.Module):
         for i, blk in enumerate(self.blocks):
             if i == 2 and self.variant != "plain":
                 u = h.detach().clone()  # Dory: representacao fixa de entrada
-                for _ in range(3):  # total 4 passes do bloco recorrente
+                for l in range(4):  # total 4 passes do bloco recorrente
                     h = nn.functional.normalize(h + u, dim=-1)  # reinjecao + L2
-                    h = blk(h)
+                    if self.variant == "loop_spec":
+                        att = blk.att
+                        saved = {}
+                        for attr in ("q", "v"):
+                            saved[attr] = getattr(att, attr)
+                            mod = att._spec_adapters[(attr, l)]
+                            # nn.Module nao deixa atribuir modulo num slot de
+                            # Parameter: apagar o slot e setattr normal (F1)
+                            del att._parameters[attr]
+                            setattr(att, attr, mod)
+                        h = blk(h)
+                        for attr, W in saved.items():
+                            # devolver o slot de Parameter antes de restaurar
+                            mod = getattr(att, attr)
+                            del att._modules[attr]
+                            att._parameters[attr] = W
+                            setattr(att, attr, W)
+                    else:
+                        h = blk(h)
             else:
                 h = blk(h)
         return self.head(self.ln(h))
@@ -241,7 +285,7 @@ def main():
     rows=[]
     only = set(x for x in a.only.split(",") if x)
     for scale in (10,50,150,300):
-        for v in ("plain","loop_core","loop_full","frozen_qv","ngpt_only"):
+        for v in ("plain","loop_core","loop_full","frozen_qv","ngpt_only","loop_spec"):
             if only and f"{scale}:{v}" not in only:
                 continue
             rows.append(run(scale,v,dev,a.seed))
