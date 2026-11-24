@@ -846,3 +846,15 @@ Estado MEDIDO agora:
   BENCH NAO CONCLUIDO: o GGUF i2_S usa IQ4_NL removido no llama.cpp atual e
   o binario do bitnet.cpp nao inclui tools; setup_env.py falha no pip do Nix.
   Proximo: converter GGUF para formato suportado ou compilar tools do fork.
+
+## 24/11 — diretriz de otimizacao continua e bench de modelos
+- Registrada diretriz permanente em ai-mesh/docs/otimizacao-contínua-diretriz-2026-11-24.md:
+  hardware ocioso vira experimento, A/B com uma variavel, medir antes de
+  otimizar, papers para nao reinventar roda, falhas documentadas.
+- GPU medida a 0% com residente 4B; takeover/release usados. Benchmark pareado:
+  Qwen3.5-4B-Uncensored Q4_K_M 55,46 tok/s vs Cyber-Ornith-1.5-9B-OBLITERATED
+  i1-Q4_K_M 17,81 tok/s (ngl=20, ctx=2048 — com ngl=99 da OOM). Servicos
+  restaurados (8092/8097 up).
+- ARTEX fork auditado failsafe-security/artex clonado em ~/work/security/artex
+  (head fd6376ca), com relatorio de auditoria v0.3.15. Nenhum artex anterior
+  existia localmente; nada apagado. Nao executado contra sistemas externos.
