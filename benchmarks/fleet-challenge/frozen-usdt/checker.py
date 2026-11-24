@@ -124,10 +124,25 @@ def evaluate(sub: Dict[str, Any]) -> Dict[str, Any]:
                 "path must name a real unfreeze function and the owner caller"
             )
     else:
+        # (24/11) O veredito FALSO tambem tem de provar o porque, e o porque
+        # aqui e' o mecanismo: so o owner (o emissor) limpa a blacklist. O
+        # gate aceitava a PALAVRA "owner" mas nao o ENDERECO do owner (que o
+        # caminho do veredito verdadeiro aceita): uma resposta correta escrita
+        # com outra palavra passava a falhar por vocabulario. Agora aceita o
+        # endereco tambem.
+        owner_addr = str(SCENARIO.get("owner", "")).lower()
+        owner_ok = ("onlyowner" in reason or "owner" in reason
+                    or (owner_addr and owner_addr in blob))
         gates["path_substantiated"] = (
-            ("onlyowner" in reason or "owner" in reason)
+            owner_ok
             and ("getblackliststatus" in evidence or "blacklist" in evidence)
         )
+        if not gates["path_substantiated"]:
+            notes["path_rejection"] = (
+                "a verdict of 'no route' must name the mechanism that blocks "
+                "it (onlyOwner / the owner address) and cite the blacklist "
+                "getter as evidence"
+            )
     preservation = _ids(verdict.get("preservation"))
     gates["preservation_actions"] = len(preservation & ALLOWED_PRESERVATION) >= 3
     notes["preservation_found"] = sorted(preservation & ALLOWED_PRESERVATION)
@@ -139,15 +154,53 @@ def evaluate(sub: Dict[str, Any]) -> Dict[str, Any]:
         acks = int(str(coord.get("acks", "0")).strip())
     except (TypeError, ValueError):
         acks = 0
-    gates["coord_acks"] = acks >= 2
+    # (24/11, medido) CORRIDA DO BENCHMARK: a persona escreve a submissao
+    # quando o seu turno acaba, mas o ACK que ela espera pode chegar DEPOIS.
+    # Medido: redteam.json foi escrito as 10:27:48Z e o primeiro ACK do
+    # desafio (do dev) chegou as 10:47:35Z, 20 minutos depois — o redteam
+    # reportou acks=0 com honestidade e foi reprovado. O runner, que e' a
+    # autoridade do bus, conta os ACKs observados e injeta em
+    # coord.acks_observed; o gate passa se qualquer uma das duas contagens
+    # chegar a 2. A contagem da persona continua no arquivo, como prova.
+    try:
+        observed = int(str(coord.get("acks_observed", "0")).strip())
+    except (TypeError, ValueError):
+        observed = 0
+    notes["acks_reported"] = acks
+    notes["acks_observed_on_bus"] = observed
+    gates["coord_acks"] = max(acks, observed) >= 2
     gates["inbox_clean"] = coord.get("inbox_stuck") == 0
     gates["liveness_proven"] = bool(_text(coord.get("liveness_proof")).strip())
 
     switches = _list((sub.get("model_swap") or {}).get("switches"))
-    gates["model_swap"] = any(
-        RATE_REASONS.search(_text(s.get("reason"))) and s.get("to")
-        for s in switches if isinstance(s, dict)
-    )
+    # (24/11, medido) ESTE GATE ERA INSATISFAZIVEL NUM RUN SAUDAVEL.
+    # O prompt do runner manda: "If your model returns 429/413, use the
+    # canonical model route and log the switch with its reason; OTHERWISE
+    # REPORT AN EMPTY SWITCHES LIST" — mas o gate exigia >=1 switch com
+    # razao de rate limit. O runner so registra model_swaps quando o spawn do
+    # modelo PRIMARIO falha (fleet-challenge.py, l.187): num run sem queda
+    # de provider, switches vazio e o unico reporte honesto, e ele reprovava.
+    # Medido no run de 20/11: as 4 personas spawnaram no primario (nenhuma
+    # troca) e as 4 falharam exatamente neste gate.
+    #
+    # REGRA NOVA: uma troca com razao de rate limit conta; e uma declaracao
+    # explicita de "nenhuma troca foi necessaria" tambem conta, desde que
+    # traga a razao real (o motivo pelo qual nao houve troca). O que nao
+    # conta e um switches vazio SEM justificativa: ai a persona nem registrou
+    # o que aconteceu.
+    if any(RATE_REASONS.search(_text(s.get("reason"))) and s.get("to")
+           for s in switches if isinstance(s, dict)):
+        gates["model_swap"] = True
+    else:
+        no_swap_needed = (sub.get("model_swap") or {}).get("no_swap_needed")
+        motivo = _text((sub.get("model_swap") or {}).get("reason")).strip()
+        gates["model_swap"] = bool(no_swap_needed) and bool(motivo)
+        if not gates["model_swap"]:
+            notes["model_swap_rejection"] = (
+                "report a switch with a rate-limit reason, or report "
+                "model_swap.no_swap_needed=true with the real reason why no "
+                "switch was necessary"
+            )
 
     handoff = sub.get("handoff") or {}
     missing = [k for k in HANDOFF_KEYS if not _text(handoff.get(k)).strip()]
