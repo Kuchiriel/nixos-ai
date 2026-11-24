@@ -865,3 +865,11 @@ Estado MEDIDO agora:
   estatistica em escala tao pequena). Conversao Marginalize-It vs EoT exato:
   KL 0.8294 nats (NaN corrigido com epsilon em log). Sem custo pago.
 - Servicos GPU restaurados apos takeover (8092 e heal active).
+
+## 24/11 — K1: ITQ ERROR no decode, resume aceito
+- ITQ completou 5 epochs (30548.6s) e checkpoint integral; morreu no mesmo
+  SyntaxError do decode (job subido antes do fix). Ambos jobs originais ERROR.
+- Resume do decode enviado e aceito (v1 RUNNING). Risco identificado: workspace
+  do Kaggle e' isolado por job, entao o resume pode nao encontrar os
+  checkpoints — correcao pendente: baixar outputs via API dentro do kernel.
+- Gap segue aberto ate results.json com PPL+decode das duas variantes e 7/7.
