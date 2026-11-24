@@ -97,7 +97,11 @@ class ScaleLM(nn.Module):
         if variant == "loop_full":
             for blk in self.blocks[n_in:n_in+n_rec]:
                 for attr in ("q", "v"):
-                    object.__setattr__(blk.att, attr, LoRALinear(getattr(blk.att, attr)))
+                    w = getattr(blk.att, attr)
+                    # remover o Parameter e registrar o LoRA como submodule
+                    # (object.__setattr__ NAO registra -> .to(device) nao move)
+                    del blk.att._parameters[attr]
+                    setattr(blk.att, attr, LoRALinear(w))
                 blk.att._use_call = True
 
     def forward(self, x):
@@ -115,9 +119,12 @@ class ScaleLM(nn.Module):
 
 
 def lo_steps(model, d):
-    # mesmo compute: escalas maiores treinam MENOS passos para mesmo total de tokens
-    base = 1200
-    return max(180, int(base * (10_000_000 / d) ** 0.45))
+    # ERRO 24/11: formula anterior dava 590 passos em 50M e 360 em 150M —
+    # 150M nao convergiu (loss 3.35 vs 0.02) e parecia "arquitetura pior".
+    # Agora: MESMO numero de passos e TAMANHO DE LOTE para todas as escalas,
+    # com orcamento fixo por RMS. Se 150M nao couber no device, reduzir
+    # batch mas MANTER passos suficientes para convergir.
+    return 800
 
 
 def run(scale, variant, device, seed_v):
@@ -174,11 +181,15 @@ def main():
     ap.add_argument("--device",default="cuda")
     ap.add_argument("--seed",type=int,default=42)
     ap.add_argument("--out",required=True)
+    ap.add_argument("--only",default="",help="filtro scale:variant, ex 10:loop_full,50:plain")
     a=ap.parse_args()
     dev=a.device if torch.cuda.is_available() and a.device=="cuda" else "cpu"
     rows=[]
+    only = set(x for x in a.only.split(",") if x)
     for scale in (10,50,150):
         for v in ("plain","loop_core","loop_full"):
+            if only and f"{scale}:{v}" not in only:
+                continue
             rows.append(run(scale,v,dev,a.seed))
     out={"paper_refs":["2611.03998 Dory","2610.40325 Meta loop","2402.17764 BitNet"],
          "same_compute_per_scale":True,"device":dev,"seed":a.seed,"rows":rows}
