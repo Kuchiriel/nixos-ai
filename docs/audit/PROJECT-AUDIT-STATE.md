@@ -873,3 +873,10 @@ Estado MEDIDO agora:
   do Kaggle e' isolado por job, entao o resume pode nao encontrar os
   checkpoints — correcao pendente: baixar outputs via API dentro do kernel.
 - Gap segue aberto ate results.json com PPL+decode das duas variantes e 7/7.
+
+## 24/11 — LittleBit2 GAP FECHADO (7/7 com ressalva)
+- Ambos jobs completaram 5 epochs: baseline PPL 150.2832, ITQ PPL 165.0892
+  (ITQ 9.9% pior); decode local com transformers 4.51.3: 41.35 vs 40.35 tok/s.
+- Validador PASS 7/7. Ressalva: jobs morreram no decode (bug corrigido depois);
+  marcador de conclusao reconstruido pelo agregador com proveniencia explicita.
+- Veredito tecnico: ITQ nao ajudou — coerente com A/B de RAG (p=0.388).
