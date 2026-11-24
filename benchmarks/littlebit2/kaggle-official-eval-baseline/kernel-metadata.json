@@ -1,0 +1,17 @@
+{
+  "id": "kuchiriel/littlebit2-official-eval-baseline-qwen3-0-6b",
+  "title": "LittleBit2 Official Eval Baseline Qwen3 0 6B",
+  "code_file": "script_eval_baseline.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "enable_internet": true,
+  "dataset_sources": [
+    "kuchiriel/littlebit2-official-baseline-qwen3-0-6b"
+  ],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
