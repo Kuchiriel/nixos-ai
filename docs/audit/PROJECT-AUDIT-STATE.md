@@ -858,3 +858,10 @@ Estado MEDIDO agora:
 - ARTEX fork auditado failsafe-security/artex clonado em ~/work/security/artex
   (head fd6376ca), com relatorio de auditoria v0.3.15. Nenhum artex anterior
   existia localmente; nada apagado. Nao executado contra sistemas externos.
+
+## 24/11 — byte-EoT A/B concluido
+- Mini-modelo ~10M, 800 passos, seed 42, mesmo compute em RTX 4050:
+  BPE val BPB 3.6181 vs byte-level 3.6024 (delta -0.0157, sem significancia
+  estatistica em escala tao pequena). Conversao Marginalize-It vs EoT exato:
+  KL 0.8294 nats (NaN corrigido com epsilon em log). Sem custo pago.
+- Servicos GPU restaurados apos takeover (8092 e heal active).
