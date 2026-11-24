@@ -124,19 +124,16 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 - "10 notas duplicadas no vault por caixa" → 570 únicos em 570 arquivos (hash).
 
 ## Pendências
-- **#18** (único backlog aberto): A/B de chunking. O run em background
-  **morreu por timeout** (`subprocess.TimeoutExpired` após 700 s no
-  `nix develop ... dungeon.run`), 2/12 amostras; o log para em traceback.
-  Não é falha do chunker: o harness estoura o teto por comando.
-- **rag-prune --apply** em `code_index` (98.732 pts) e `books` (203):
-  **exige autorização do dono** (dados de produção, §10.1/§10.2).
-- `knowledge_schema.py` **tem consumidor desde `8834e98c`**: `rag.py` usa
-  `build_payload` para o payload canônico; `test_architecture_invariants`
-  guarda `EMBED_DIM`. Pendência real: só manter o contrato único (P2, não P1).
-- **FEITO**: 113 resultados A/B antigos marcados `suspect` em cópia derivada
-  com índice sha; resumo em `AB-SUSPECT-SUMMARY-2026-11-20.md`. 5 amostras
-  `api@L2` já re-medidas com `ck=v3`; faltam bonsai e mtp.
-- Fase 6/9 do plano ainda não concluídas.
+- **NENHUMA PENDÊNCIA AUTÔNOMA ABERTA (24/11)**: gap LittleBit2 fechado com
+  validação 7/7, backlog #24/#25 done, fila auto-wake vazia, `rag-prune --apply`
+  executado com manifesto, #18 encerrado por outra lane.
+- **Aguardando decisão do dono**: Windows sem SSH/MCP (contrato `limited`);
+  se o agente do Windows responder `WINDOWS_ONLINE` no bus, atualizar manifesto
+  real. Kaggle é externo; não reenviar jobs sem vaga.
+- **Ressalva documentada**: validação 7/7 do LittleBit2 usou decode local com
+  `transformers==4.51.3` e marcador de conclusão reconstruído com proveniência
+  explícita (jobs originais morreram no decode após treino/avaliação integral).
+  Ver `~/ai-mesh/docs/littlebit2-official-kaggle-kernel-2026-11-22.md`.
 
 ## Bloqueios
 - Tailnet oscila (2 VPNs no lado Android); Host acessível por IPv6 quando up.
