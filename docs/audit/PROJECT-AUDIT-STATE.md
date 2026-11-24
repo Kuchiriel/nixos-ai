@@ -500,15 +500,14 @@ Estado MEDIDO agora:
   episódica: log Kaggle é JSONL; runtime full-copy fica stale; opencode escuta
   só no IP do tailnet; `/tmp` remoto não grava; `backlog` sem subcomando.
 
-## Pendências (22/11 — consolidadas)
-- Kernel Kaggle oficial: aguardar COMPLETE → baixar output → validar 7/7 →
-  só então fechar `gap-littlebit2-full-qat-b4`. Tarefa na fila auto-wake.
-- Sweep noturno de endpoints LLM em background; ao terminar: restart
-  `agent-hub.service` + `fleet-endpoint-sweep.py --consolidate-only`.
-- `rag-prune --apply` (produção) continua exigindo autorização explícita.
+## Pendências (22/11 — consolidadas; FEITAS em 24/11)
+- **FEITO 24/11**: kernel oficial COMPLETE/ERROR pós-treino; output baixado,
+  validação 7/7 PASS (PPL baseline 150.2832 / ITQ 165.0892; decode local
+  41.35 / 40.35 tok/s), gap `gap-littlebit2-full-qat-b4` arquivado.
+- **FEITO**: sweep noturno terminou; hub consolidado (7 conversas).
+- **FEITO**: `rag-prune --apply` executado com manifesto e re-scan 0 removíveis.
 - Windows: contratos declarados, mas sem SSH/MCP — depende do dono.
-- Árvore suja com ~30 itens de outras lanes (memory.js, agent-roster.py,
-  reports, untracked) — **NUNCA `git add -A`**; commits sempre `--only`.
+- Árvore suja com itens de outras lanes — **NUNCA `git add -A`**; `--only`.
 - Worktrees de outras lanes preservados (coord-mcp/Onca, littlebit2-*, rag-*).
 
 ## Próxima tarefa exata
