@@ -10,6 +10,7 @@ from importlib.machinery import SourceFileLoader
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 KERNEL = ROOT / "benchmarks/littlebit2/kaggle-official"
 ITQ_KERNEL = ROOT / "benchmarks/littlebit2/kaggle-official-itq"
+EVAL_BASELINE_KERNEL = ROOT / "benchmarks/littlebit2/kaggle-official-eval-baseline"
 
 
 class LittleBit2OfficialKernelContractTests(unittest.TestCase):
@@ -214,6 +215,47 @@ class LittleBit2OfficialKernelContractTests(unittest.TestCase):
                          [v["name"] for v in module.selected_variants(variants, "littlebit2")])
         with self.assertRaises(RuntimeError):
             module.selected_variants(variants, "bogus")
+
+    def test_eval_baseline_kernel_reuses_dataset_checkpoint(self):
+        metadata = json.loads(
+            (EVAL_BASELINE_KERNEL / "kernel-metadata.json").read_text(encoding="utf-8")
+        )
+        wrapper = (EVAL_BASELINE_KERNEL / "script_eval_baseline.py").read_text(encoding="utf-8")
+        self.assertEqual(
+            "kuchiriel/littlebit2-official-eval-baseline-qwen3-0-6b",
+            metadata["id"],
+        )
+        self.assertEqual(
+            ["kuchiriel/littlebit2-official-baseline-qwen3-0-6b"],
+            metadata["dataset_sources"],
+        )
+        self.assertIn("LB_BASELINE_PATH", wrapper)
+        self.assertIn("kaggle/input/littlebit2-official-baseline-qwen3-0-6b/checkpoint", wrapper)
+        py_compile.compile(str(EVAL_BASELINE_KERNEL / "script_eval_baseline.py"), doraise=True)
+
+    def test_evaluate_existing_reuses_checkpoint_without_training(self):
+        import tempfile
+        script_path = KERNEL / "script.py"
+        spec = importlib.util.spec_from_loader(
+            "littlebit2_official_kernel_eval_existing",
+            SourceFileLoader("littlebit2_official_kernel_eval_existing", str(script_path)),
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="littlebit2-eval-existing-"))
+        for name in ("config.json", "littlebit_config.json", "model.safetensors"):
+            (tmp / name).write_text("fixture")
+        old_ppl, old_decode = module.official_ppl, module.decode_latency
+        module.official_ppl = lambda _path: 12.5
+        module.decode_latency = lambda _path: {"tokens_per_second": 2.0}
+        try:
+            result = module.evaluate_existing(tmp)
+        finally:
+            module.official_ppl = old_ppl
+            module.decode_latency = old_decode
+        self.assertTrue(result["training_reused"])
+        self.assertEqual(12.5, result["official_wikitext2_ppl"])
+        self.assertEqual(2.0, result["decode"]["tokens_per_second"])
 
     def test_kernel_metadata_and_script_are_executable_contract(self):
         self.assertEqual("script.py", self.metadata["code_file"])

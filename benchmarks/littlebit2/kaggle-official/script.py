@@ -336,6 +336,23 @@ def selected_variants(variants: list[dict] | None = None,
     return chosen
 
 
+def evaluate_existing(path: Path) -> dict:
+    """Evaluate an already-trained official checkpoint without retraining."""
+    required = ["config.json", "littlebit_config.json", "model.safetensors"]
+    missing = [name for name in required if not (path / name).is_file()]
+    if missing:
+        raise RuntimeError("existing checkpoint missing artifacts: " + ",".join(missing))
+    ppl = official_ppl(path)
+    decode = decode_latency(path)
+    return {
+        "use_itq": False,
+        "checkpoint": str(path),
+        "official_wikitext2_ppl": ppl,
+        "decode": decode,
+        "training_reused": True,
+    }
+
+
 def main() -> int:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     log("contract=" + json.dumps(CONTRACT, sort_keys=True))
@@ -365,6 +382,18 @@ def main() -> int:
         "dataset": dataset,
         "variants": {},
     }
+    existing = (os.environ.get("LITTLEBIT2_BASELINE_PATH")
+                or os.environ.get("LB_BASELINE_PATH") or "").strip()
+    if existing:
+        path = Path(existing).expanduser().resolve()
+        log("evaluate_existing_baseline=" + str(path))
+        results["variants"]["baseline"] = evaluate_existing(path)
+        (OUTPUT / "results.json").write_text(
+            json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        log("RESULTS " + json.dumps(results, sort_keys=True))
+        log("OFFICIAL_LITTLEBIT2_EVAL_COMPLETE")
+        return 0
     selector = (os.environ.get("LITTLEBIT2_VARIANT")
                 or os.environ.get("LB_VARIANT") or "all")
     variants = selected_variants(selector=selector)
