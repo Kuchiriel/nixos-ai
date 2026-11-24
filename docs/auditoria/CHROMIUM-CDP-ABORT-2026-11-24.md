@@ -52,13 +52,23 @@ não da minha.
 - **Como testar rápido** (sem esperar o conserto):
   `CH=$(systemctl --user cat chromium-cdp.service | grep -oE "/nix/store/[^ ]*chromium-[^ ]*/bin/chromium" | head -1)` e rodar o comando acima numa porta livre.
 
-## O que falta
+## O que falta (a próxima hypothesis testável)
 
-Uma hypothesis testável do lado do build: o Chromium do Nix abortar no
-`dbus/bus.cc` é um sintoma conhecido de **falta de `libdbus` no closure do
-binário** (o `dbus` em `LD_LIBRARY_PATH`) ou de um **rebuild** com o
-`--without-dbus`/com o `dbus` certo. Checar as libs do binário:
+O build do Chromium precisa do **helper setuid do sandbox**
+(`__chromium-suid-sandbox`) em `/run/wrappers/bin/` — ele não está lá. As
+hipóteses que sobram, em ordem de teste:
 
-```
-ldd /nix/store/.../chromium-154.0.8037.97/bin/chromium | grep -i dbus
+1. o pacote do Chromium no nixpkgs foi empacotado **sem** o
+   `chrome-suid-sandbox` (o wrapper referencia um helper que o build não
+   instalou): rebuild do pacote, ou overlay do `makeWrapper` que não recria
+   o helper;
+2. o helper existe em outro prefixo do store (procurar
+   `ls /nix/store/*chromium*/lib/ | grep -i suid`) e o wrapper aponta para
+   o path errado.
+
+Checar o helper antes de qualquer coisa:
+
+```bash
+ls /run/wrappers/bin/ | grep -i chromium        # esperado: 1 helper
+ls /nix/store/*chromium*/lib/ 2>/dev/null | grep -i suid
 ```
