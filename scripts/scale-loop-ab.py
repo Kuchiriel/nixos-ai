@@ -31,10 +31,13 @@ class Attn(nn.Module):
     def __init__(self, d, heads, scale_in=False):
         super().__init__()
         self.h, self.dh = heads, d // heads
-        self.q = nn.Parameter(torch.randn(d, d) * 0.02)
-        self.k = nn.Parameter(torch.randn(d, d) * 0.02)
-        self.v = nn.Parameter(torch.randn(d, d) * 0.02)
-        self.o = nn.Parameter(torch.randn(d, d) * 0.02)
+        # init escalada por 1/sqrt(d): com d=1216 o init fixo 0.02 faz
+        # q@k^T/sqrt(dh) saturar o softmax (loss plateau ~3.3 = ln(65)).
+        std = d ** -0.5
+        self.q = nn.Parameter(torch.randn(d, d) * std)
+        self.k = nn.Parameter(torch.randn(d, d) * std)
+        self.v = nn.Parameter(torch.randn(d, d) * std)
+        self.o = nn.Parameter(torch.randn(d, d) * std)
         self.scale_in = scale_in
         if scale_in:
             self.alpha = nn.Parameter(torch.tensor(0.05))  # residual rate
@@ -45,7 +48,11 @@ class Attn(nn.Module):
         q = (self.q(x) if call else x @ self.q).view(b, t, self.h, self.dh).transpose(1, 2)
         k = (x @ self.k).view(b, t, self.h, self.dh).transpose(1, 2)
         v = (self.v(x) if call else x @ self.v).view(b, t, self.h, self.dh).transpose(1, 2)
-        att = torch.softmax(q @ k.transpose(-2, -1) / math.sqrt(self.dh), -1)
+        # Escala correta: heads = d//64 mantem dh=64, logo q@k^T ~ sqrt(d)
+        # e /sqrt(dh) deixa a escala crescer com sqrt(d) -> softmax satura
+        # em d=1216 (loss plateau ~3.3). Dividir por sqrt(h) compensa.
+        scale = math.sqrt(self.dh * self.h)   # = sqrt(d)
+        att = torch.softmax(q @ k.transpose(-2, -1) / scale, -1)
         out = (att @ v).transpose(1, 2).contiguous().view(b, t, d) @ self.o
         if self.scale_in:
             return nn.functional.normalize(x + self.alpha * out, dim=-1)  # nGPT/L2
@@ -87,13 +94,23 @@ class ScaleLM(nn.Module):
     def __init__(self, vocab, d, variant):
         super().__init__()
         self.d, self.variant = d, variant
-        self.scale_in = variant == "loop_full"
+        self.scale_in = variant in ("loop_full", "ngpt_only")
         self.tok = nn.Embedding(vocab, d)
         self.pos = nn.Embedding(256, d)
         n_in, n_rec, n_out = 2, 4, 2
-        self.blocks = nn.ModuleList([Block(d, max(2, d//64), self.scale_in) for _ in range(n_in+n_rec+n_out)])
+        # heads divisor exato de d (d=1768 nao e' divisivel por 27 -> shape bug)
+        heads = 8
+        while d % heads != 0:
+            heads += 1
+        self.blocks = nn.ModuleList([Block(d, heads, self.scale_in) for _ in range(n_in+n_rec+n_out)])
         self.ln = nn.LayerNorm(d)
         self.head = nn.Linear(d, vocab)
+        if variant == "ngpt_only":
+            pass  # so a normalizacao nGPT/L2, sem LoRA
+        if variant == "frozen_qv":
+            for blk in self.blocks:
+                for attr in ("q", "v"):
+                    getattr(blk.att, attr).requires_grad_(False)
         if variant == "loop_full":
             for blk in self.blocks[n_in:n_in+n_rec]:
                 for attr in ("q", "v"):
@@ -119,12 +136,14 @@ class ScaleLM(nn.Module):
 
 
 def lo_steps(model, d):
-    # ERRO 24/11: formula anterior dava 590 passos em 50M e 360 em 150M —
-    # 150M nao convergiu (loss 3.35 vs 0.02) e parecia "arquitetura pior".
-    # Agora: MESMO numero de passos e TAMANHO DE LOTE para todas as escalas,
-    # com orcamento fixo por RMS. Se 150M nao couber no device, reduzir
-    # batch mas MANTER passos suficientes para convergir.
-    return 800
+    # ERRO 24/11 (2a vez): batch reduzido para 8 em GPU cortou tokens vistos
+    # de 2.46M para 0.82M — 150M ficou under-trained (loss 3.35) e parecia
+    # "arquitetura pior". Correcao: TOKENS VISTOS constantes em todas escalas.
+    # 800 passos x batch 24 x 128 = 2.457M tokens (referencia 50M).
+    # Com batch 8: 800*24/8 = 2400 passos para os mesmos 2.457M tokens.
+    BATCH = 8   # fixo para caber na GPU com residentes
+    TARGET_TOKENS = 800 * 24 * 128
+    return max(800, TARGET_TOKENS // (BATCH * 128))
 
 
 def run(scale, variant, device, seed_v):
@@ -135,19 +154,27 @@ def run(scale, variant, device, seed_v):
     chars = sorted(set(text)); stoi = {c:i for i,c in enumerate(chars)}
     ids = [stoi[c] for c in text[:n]]; vids = [stoi[c] for c in text[n:]]
     # calibrado: params ~ 8 blocos x 12 d^2 => d=320~10M, 704~50M, 1216~150M
-    d_map = {10: 320, 50: 704, 150: 1216}
+    # 150M -> d=1216 -> 142M reais; 300M -> d~1768
+    d_map = {10: 320, 50: 704, 150: 1216, 300: 1768}
     d = d_map[scale]
     model = ScaleLM(len(chars), d, variant).to(device)
     params = sum(p.numel() for p in model.parameters())
     steps = lo_steps(model, params)
-    opt = torch.optim.AdamW(model.parameters(), lr=3e-4)
+    # foreach=False evita o pico do _multi_tensor_adam (foi onde 300M OOMou)
+    # F7: MESMO otimizador em 150M e 300M (controla o confound medido)
+    if scale in (150, 300):
+        opt = torch.optim.Adafactor(model.parameters(), lr=3e-4,
+                                    beta2_decay=-0.8, eps=(None, 0.001))
+    else:
+        opt = torch.optim.AdamW(model.parameters(), lr=3e-4, foreach=False)
     t0 = time.perf_counter(); model.train(); seen = 0
     losses = []
     for step in range(1, steps+1):
-        st = torch.randint(0, len(ids)-128-1, (24,))
-        x = torch.tensor([ids[k:k+128] for k in st.tolist()], device=device)
-        y = torch.tensor([ids[k+1:k+1+128] for k in st.tolist()], device=device)
-        loss = nn.functional.cross_entropy(model(x).reshape(-1, len(chars)), y.reshape(-1))
+        st = torch.randint(0, len(ids)-128-1, (8,))
+        x = torch.tensor([ids[k:k+128] for k in st.tolist()[:8]], device=device)
+        y = torch.tensor([ids[k+1:k+1+128] for k in st.tolist()[:8]], device=device)
+        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+            loss = nn.functional.cross_entropy(model(x).reshape(-1, len(chars)).float(), y.reshape(-1))
         opt.zero_grad(); loss.backward(); opt.step()
         seen += x.numel(); losses.append(round(float(loss.detach()), 4))
         if step % max(50, steps//5) == 0:
@@ -166,7 +193,34 @@ def run(scale, variant, device, seed_v):
             tot+=float(nn.functional.cross_entropy(model(x).reshape(-1,len(chars)),y.reshape(-1),reduction="sum"))
             cnt+=y.numel()
     val=tot/max(cnt,1)
+    # eixo Dory: tokens gerados ate a distribuicao "decidir" (entropia baixa
+    # sustentada 3 passos). Medido com o MESMO prompt/seed nas duas variantes.
+    seed(seed_v)
+    gen_start = torch.zeros((1,1), dtype=torch.long, device=device)
+    gen_entropies = []
+    with torch.no_grad():
+        h = gen_start
+        for _ in range(128):
+            logits = model(h)[:, -1, :]
+            logp = torch.log_softmax(logits.float(), -1)
+            ent = float(-(logp.exp() * logp).sum())
+            gen_entropies.append(ent)
+            nxt = logits.argmax(-1, keepdim=True)
+            h = torch.cat([h, nxt], dim=1)
+    # F8: entropia media dos logits gerados (eixo Dory/token-efficiency)
+    gen_entropy_mean = round(sum(gen_entropies) / len(gen_entropies), 4)
+    gen_entropy_first10 = round(sum(gen_entropies[:10]) / 10, 4)
+    stop_at = 128
+    for i in range(2, len(gen_entropies)):
+        if max(gen_entropies[i-2:i+1]) < 0.5:
+            stop_at = i + 1
+            break
     r={"scale_m":scale,"variant":variant,"params":params,"steps":steps,
+       "tokens_until_answer": stop_at,
+       "gen_entropy_first": round(gen_entropies[0], 4),
+       "gen_entropy_last": round(gen_entropies[-1], 4),
+       "gen_entropy_mean": gen_entropy_mean,
+       "gen_entropy_first10": gen_entropy_first10,
        "val_loss":round(val,4),"val_bpb":round(val/math.log(2),4),
        "train_seconds":round(train_s,1),"train_tok_s":round(seen/train_s,1),
        "loss_first":losses[0],"loss_last":losses[-1],
@@ -186,8 +240,8 @@ def main():
     dev=a.device if torch.cuda.is_available() and a.device=="cuda" else "cpu"
     rows=[]
     only = set(x for x in a.only.split(",") if x)
-    for scale in (10,50,150):
-        for v in ("plain","loop_core","loop_full"):
+    for scale in (10,50,150,300):
+        for v in ("plain","loop_core","loop_full","frozen_qv","ngpt_only"):
             if only and f"{scale}:{v}" not in only:
                 continue
             rows.append(run(scale,v,dev,a.seed))
