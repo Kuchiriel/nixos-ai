@@ -832,3 +832,17 @@ Estado MEDIDO agora:
   corrigidos; jobs-audit limpo.
 - `scripts/audit-doc-links.py`: 58 links em docs/audit verificados, 0 quebrados.
   O xref_audit.py global (2338 dangling) conta paths fora de escopo — ruído.
+
+## 24/11 — LLM do zero: Fase 0 (papers + parcial bench)
+- 4 papers base identificados e salvos em ~/Books/papers/frontier-2026-11-23:
+  2310.11453 (BitNet), 2402.17764 (b1.58), 2610.40325 (Loop), 2504.16580 (INR).
+  Dois IDs iniciais estavam ERRADOS e foram renomeados .WRONG-PAPER.bak (nada
+  apagado). Coleção isolada jarvis_test_frontier_2026_11 agora com 554 pontos.
+- Plano detalhado com arquitetura concreta da Fase 1 (48M params, d=512,
+  4 camadas × 4 loops, LoRA r=8, TinyStories 200M tokens, 48-72h T4) em
+  ai-mesh/docs/llm-do-zero-plano-2026-11-24.md.
+- Fase 0 PARCIAL: BitNet 2B GGUF baixado (1,2GB), fork bitnet.cpp compilado
+  apos corrigir macros ROW_BLOCK_SIZE/COL_BLOCK_SIZE ausentes no upstream.
+  BENCH NAO CONCLUIDO: o GGUF i2_S usa IQ4_NL removido no llama.cpp atual e
+  o binario do bitnet.cpp nao inclui tools; setup_env.py falha no pip do Nix.
+  Proximo: converter GGUF para formato suportado ou compilar tools do fork.
