@@ -173,7 +173,7 @@ def build(out_dir, heldout_path, seed=7, test_ratio=0.25, calib=8,
     # o `_id` entrava duas vezes com o mesmo estado e o mesmo rotulo
     # (peso dobrado sem motivo). Aqui cada item vira UMA linha — a mais
     # recente (a resposta mais nova do dono) — e o `to_laya` decide se o
-    # item e' ambiguo (respostas diferentes ⇒ nao entra).
+    # item e' ambiguo (respostas diferentes: nao entra).
     ultima_por_item = {}
     for r in train_src:
         rid = str(r.get("id") or "")
@@ -256,7 +256,7 @@ def build(out_dir, heldout_path, seed=7, test_ratio=0.25, calib=8,
           f"heldout={len(held_laya)}")
     print(f"distribuicao do treino: {dict(dist)}")
     if dist and len(dist) == 1:
-        print("AVISO: o treino tem uma classe so => o modelo aprenderia um "
+        print("AVISO: o treino tem uma classe so: o modelo aprenderia um "
               "prior, nao o rubric. Colete mais exemplos das outras classes.")
     print(f"vazamento entre arquivos: {overlaps if overlaps else 'nenhum'}")
     return out, overlaps
@@ -283,6 +283,25 @@ def make_heldout(labels, n, seed=7, out_path=None, force=False):
             and str(r.get("answer", "")) in LEVEL_TO_KEY]
     if not real:
         return None, "sem labels reais do dono (as de pratica nao contam)"
+    # (24/11) O ITEM AMBIGUO NAO ENTRA NO HELD-OUT. Um item que o dono
+    # julgou DUAS VEZES com RESPOSTAS DIFERENTES nao tem uma resposta
+    # certa: medir o modelo contra ele e' jogar uma moeda (e o numero que
+    # decide a delegacao nao pode ser uma moeda). Medido na provadora da
+    # cadeia: o item ambiguo da prova entrou no held-out. Pelo paper do
+    # acervo (arXiv 2511.14117) a distribuicao das anotacoes e' o ground
+    # truth — e aqui ela e' ambigua por construcao.
+    respostas_por_id = {}
+    for r in real:
+        respostas_por_id.setdefault(str(r.get("id")), []).append(
+            str(r.get("answer")))
+    ambiguos = {k for k, v in respostas_por_id.items()
+                if len({x.strip() for x in v if x.strip()}) > 1}
+    if ambiguos:
+        real = [r for r in real if str(r.get("id")) not in ambiguos]
+    if not real:
+        return None, ("todos os labels reais sao de itens AMBIGUOS (o dono "
+                      "julgou o mesmo item com respostas diferentes): nenhum "
+                      "deles serve de gabarito, julgue-os de novo")
     by_class = {}
     for r in real:
         by_class.setdefault(str(r.get("answer")), []).append(r)
@@ -307,7 +326,9 @@ def make_heldout(labels, n, seed=7, out_path=None, force=False):
     write_jsonl(out, picked)
     dist = Counter(str(r.get("answer")) for r in picked)
     return out, (f"held-out criado: {len(picked)} itens | "
-                 f"distribuicao {dict(dist)} | {out}")
+                 f"distribuicao {dict(dist)} | "
+                 f"{len(ambiguos)} item(ns) ambiguo(s) fora do held-out | "
+                 f"{out}")
 
 
 def self_test():
@@ -360,10 +381,10 @@ def self_test():
     write_jsonl(tmp2 / "heldout.jsonl", [])
     dup = tmp2 / "labels.jsonl"
     write_jsonl(dup, [
-        # r1: duas respostas IGUAIS (o dono se decidiu) => UM item
+        # r1: duas respostas IGUAIS (o dono se decidiu): UM item
         {"id": "r1", "context": "Query: q\nPage: p", "answer": "3"},
         {"id": "r1", "context": "Query: q\nPage: p", "answer": "3"},
-        # r2: duas respostas DIFERENTES (ambiguo) => NENHUM item
+        # r2: duas respostas DIFERENTES (ambiguo): NENHUM item
         {"id": "r2", "context": "Query: q2\nPage: p2", "answer": "0"},
         {"id": "r2", "context": "Query: q2\nPage: p2", "answer": "1"},
         {"id": "r3", "context": "Query: q3\nPage: p3", "answer": "1"},
