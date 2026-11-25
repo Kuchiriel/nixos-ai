@@ -46,11 +46,13 @@ que um arquivo antigo não volte a inflar o número.
 
 - **Treino**: LoRA no 4B do router (`jarvis-mtp-lora` / Laya), com os itens
   em `data/judgments/train.jsonl`.
-- **Medida**: `scripts/judgment-bench.py --data train.jsonl --heldout heldout.jsonl`
+- **Medida**: `scripts/judgment-bench.py --heldout data/judgments/heldout.jsonl`
   : concordância + intervalo de Wilson + modo recomendado.
-- **Held-out escrito à mão**, sem olhar o treino (é o método do bench honesto
+- **Held-out criado pela ferramenta**, sem olhar o treino (é o método do bench honesto
   da voz, `benchmarks/voice/bench_heldout2.py`): sem split aleatório, porque
-  split aleatório vaza.
+  split aleatório vaza. `scripts/judgment-dataset.py --make-heldout N` faz isso
+  (estratificado e determinístico) e **deixa fora o item que o dono julgou duas vezes
+  com respostas diferentes**: sem gabarito certo, medir contra ele é jogar uma moeda.
 - **O corte do dataset é por item, não por linha** (`scripts/judgment-dataset.py`):
   quando o mesmo item é julgado duas vezes (é assim que se mede a
   repetibilidade do dono), as duas respostas ficam no **mesmo** arquivo. Se

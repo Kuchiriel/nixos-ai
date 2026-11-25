@@ -49,10 +49,13 @@ python3 scripts/seletor-fracas.py      # qual item julgar primeiro
 python3 scripts/judgment-bench.py --data data/judgments/labels.jsonl
 ```
 
-O dono precisa de **~50 labels**: os **12 itens de prática** já existem
-(`data/judgments/uhrs-practice-items.jsonl`) e o resto vem da **qualificação
-do UHRS** (que ele já tem que fazer, e paga). Depois das labels, o fluxo é
-um comando só: `--make-heldout`, dataset, treino, converter, bench.
+O dono precisa de **~50 labels**: os **20 itens de prática** já existem
+(`data/judgments/uhrs-practice-items.jsonl`, ids `p01..p20`, com 6 da classe
+que o gate erra) e o resto vem da **qualificação do UHRS** (que ele já tem
+que fazer, e paga). Depois das labels, o fluxo é o **runbook**:
+[`docs/auditoria/RUNBOOK-DELEGACAO-2026-11-25.md`](../docs/auditoria/RUNBOOK-DELEGACAO-2026-11-25.md)
+(judigar por voz, `--make-heldout`, dataset, treino, bench, e o que fazer com
+o número).
 
 ## 4. O que NÃO se faz aqui
 
