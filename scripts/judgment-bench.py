@@ -172,7 +172,7 @@ def pick_model(bases, wanted: str = "", timeout: float = 10.0):
 
 def ask_model(base, model, row, timeout=90):
     """Chama o modelo local (OpenAI-compatible) e devolve a resposta curta."""
-    ctx, _dropped = sanitize_context(row.get("context", ""))
+    ctx, _dropped = sanitize_context(row_context(row))
     body = {
         "model": model,
         "messages": [
@@ -195,6 +195,49 @@ def ask_model(base, model, row, timeout=90):
 def norm(s):
     return " ".join(str(s or "").lower().replace(".", " ").replace(",", " ")
                     .split())
+
+
+# (24/11) O BENCH SABE LER OS DOIS FORMATOS.
+#
+# MEDIDO: o proprio docstring do bench mandava
+#     python3 scripts/judgment-bench.py --data data/judgments/train.jsonl
+# mas esse arquivo e' do Laya: o campo do contexto e' `state` (e nao
+# `context`) e o campo da resposta e' a CHAVE ("MODERATELY"), nao o numero.
+# O bench lia `row.get("context", "")`: VAZIO (o modelo recebia um prompt
+# sem consulta e sem pagina) e comparava `norm("MODERATELY")` com a
+# resposta numerica do modelo ("2"): NUNCA um acerto, com qualquer modelo.
+# Ou seja: o caminho documentado media 0% e o numero que decide a
+# delegacao seria falso.
+#
+# A correcao: o bench normaliza CADA linha antes de usar — o contexto vem
+# de `context` OU de `state`, e a resposta vem do numero ("3") OU da chave
+# ("HIGHLY"). O numero e' o vocabulario do SYSTEM prompt (o modelo
+# responde 3/2/1/0), entao a chave e' traduzida para o numero.
+KEY_TO_LEVEL = {"HIGHLY": "3", "MODERATELY": "2", "SLIGHTLY": "1", "NOT": "0"}
+
+
+def row_context(row):
+    """O contexto do item, nos dois formatos (o do dono e o do Laya)."""
+    ctx = row.get("context")
+    if not ctx:
+        ctx = row.get("state")
+    return str(ctx or "")
+
+
+def row_answer(row):
+    """A resposta do dono no vocabulario do bench: o numero (3/2/1/0).
+
+    (24/11) O formato do dono usa o numero e o do Laya usa a chave; o
+    SYSTEM prompt pede o numero, entao a chave vira numero aqui. Sem
+    isso, o bench comparava "MODERATELY" com "2" e dava 0% sempre.
+    """
+    raw = str(row.get("answer") or "").strip()
+    if raw in KEY_TO_LEVEL:
+        return KEY_TO_LEVEL[raw]
+    up = raw.upper()
+    if up in KEY_TO_LEVEL:
+        return KEY_TO_LEVEL[up]
+    return norm(raw)
 
 
 # (14/11) O CONTEXTO NAO PODE LEVAR A RESPOSTA. Medido: com a resposta do
@@ -374,19 +417,19 @@ def main():
     predictions = []          # (gold, pred) por item: UMA chamada por item
     cleaned = 0              # itens cujo contexto entregava a resposta
     for r in rows:
-        _ctx, dropped = sanitize_context(r.get("context", ""))
+        _ctx, dropped = sanitize_context(row_context(r))
         cleaned += 1 if dropped else 0
         try:
             pred = ask_model(base, model, r)
         except Exception as exc:  # noqa: BLE001
             print(f"erro ao chamar o modelo: {exc}", file=sys.stderr)
             return 2
-        gold = norm(r.get("answer"))
+        gold = row_answer(r)
         predictions.append((gold, norm(pred)))
         hit = gold == norm(pred)
         same += hit
         if not hit:
-            misses.append((item_id(r), r.get("answer"), pred))
+            misses.append((item_id(r), row_answer(r), pred))
     n = len(rows)
     if cleaned:
         print(f"AVISO: {cleaned} item(ns) tinham a resposta do dono DENTRO do "
@@ -426,7 +469,7 @@ def main():
     # diferentes, a repetibilidade do dono e' o teto real da delegacao.
     by_id = {}
     for r in rows:
-        by_id.setdefault(item_id(r), []).append(norm(r.get("answer")))
+        by_id.setdefault(item_id(r), []).append(row_answer(r))
     repeated = {k: v for k, v in by_id.items() if len(v) > 1}
     if repeated:
         agree = sum(1 for v in repeated.values() if len(set(v)) == 1)
