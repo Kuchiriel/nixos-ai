@@ -106,7 +106,7 @@ class ScaleLM(nn.Module):
     def __init__(self, vocab, d, variant):
         super().__init__()
         self.d, self.variant = d, variant
-        self.scale_in = variant in ("loop_full", "ngpt_only", "loop_spec")
+        self.scale_in = variant in ("loop_full", "ngpt_only", "loop_spec", "kv_last")
         self.tok = nn.Embedding(vocab, d)
         self.pos = nn.Embedding(256, d)
         n_in, n_rec, n_out = 2, 4, 2
@@ -117,7 +117,11 @@ class ScaleLM(nn.Module):
         self.blocks = nn.ModuleList([Block(d, heads, self.scale_in) for _ in range(n_in+n_rec+n_out)])
         self.ln = nn.LayerNorm(d)
         self.head = nn.Linear(d, vocab)
-        if variant == "loop_spec":
+        if variant == "kv_last":
+            # Dory 2611.03998 sec 6.1: cache do ULTIMO loop sobrescreve os
+            # anteriores -> KV mem tem tamanho de 1 loop, nao 4.
+            self.kv_last = True
+        if variant in ("loop_spec", "kv_last"):
             # Meta 2610.40325 sec 2.2: W^(l) = W + DeltaW^(l), com adapters
             # LOOP-ESPECIFICOS (cada passo do bloco recorrente tem os seus).
             for bi in range(n_in, n_in + n_rec):
@@ -155,7 +159,7 @@ class ScaleLM(nn.Module):
                 u = h.detach().clone()  # Dory: representacao fixa de entrada
                 for l in range(4):  # total 4 passes do bloco recorrente
                     h = nn.functional.normalize(h + u, dim=-1)  # reinjecao + L2
-                    if self.variant == "loop_spec":
+                    if self.variant in ("loop_spec", "kv_last"):
                         att = blk.att
                         saved = {}
                         for attr in ("q", "v"):
@@ -285,7 +289,7 @@ def main():
     rows=[]
     only = set(x for x in a.only.split(",") if x)
     for scale in (10,50,150,300):
-        for v in ("plain","loop_core","loop_full","frozen_qv","ngpt_only","loop_spec"):
+        for v in ("plain","loop_core","loop_full","frozen_qv","ngpt_only","loop_spec","kv_last"):
             if only and f"{scale}:{v}" not in only:
                 continue
             rows.append(run(scale,v,dev,a.seed))
