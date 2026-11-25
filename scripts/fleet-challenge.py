@@ -12,6 +12,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -154,6 +155,13 @@ def bus_acks_observed() -> int:
     reportou acks=0 com honestidade e foi reprovada. O runner e' a
     autoridade do bus: conta os ACKs observados e injeta em
     coord.acks_observed, sem mexer na contagem que a persona reportou.
+
+    (24/11, medido pelo operator) O filtro tem que ser de ACK DE VERDADE:
+    "ACK" + "challenge" na lowercase contava tambem "crouton-alpha" (que tem
+    "ack" dentro do nome, porque o filtro era case-insensitive) e posts de
+    coord como "**done** de `challenge-redteam`". Agora o corpo precisa
+    comecar com a marca do ACK, precedida de uma tag [challenge-...] (a forma
+    que as personas do desafio usam), e o "done"/"msg" nao conta.
     """
     rc, out = sh(["gh", "issue", "view", BUS_ISSUE, "--repo", BUS_REPO,
                   "--json", "comments"], timeout=90)
@@ -168,10 +176,11 @@ def bus_acks_observed() -> int:
     comments = data.get("comments") if isinstance(data, dict) else data
     if not isinstance(comments, list):
         return 0
+    ack_re = re.compile(r"^\s*\[challenge-[a-z]+\]\s*ACK\b", re.I)
     n = 0
     for c in comments:
         body = str(c.get("body") or "")
-        if "ACK" in body and ("challenge" in body.lower()):
+        if ack_re.match(body):
             n += 1
     return n
 
