@@ -42,21 +42,35 @@ class Attn(nn.Module):
         if scale_in:
             self.alpha = nn.Parameter(torch.tensor(0.05))  # residual rate
 
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, cache=None, causal=False):
         b, t, d = x.shape
         call = isinstance(self.q, nn.Module)  # SpecLinear/LoRALinear
         q = (self.q(x) if call else x @ self.q).view(b, t, self.h, self.dh).transpose(1, 2)
         k = (x @ self.k).view(b, t, self.h, self.dh).transpose(1, 2)
         v = (self.v(x) if call else x @ self.v).view(b, t, self.h, self.dh).transpose(1, 2)
+        if cache is not None:  # F15: KV cache real (per_loop ou last-loop)
+            ck, cv = cache
+            k = torch.cat([ck, k], dim=2)
+            v = torch.cat([cv, v], dim=2)
+        new_cache = (k.detach(), v.detach())
         # Escala correta: heads = d//64 mantem dh=64, logo q@k^T ~ sqrt(d)
         # e /sqrt(dh) deixa a escala crescer com sqrt(d) -> softmax satura
         # em d=1216 (loss plateau ~3.3). Dividir por sqrt(h) compensa.
         scale = math.sqrt(self.dh * self.h)   # = sqrt(d)
-        att = torch.softmax(q @ k.transpose(-2, -1) / scale, -1)
+        scores = q @ k.transpose(-2, -1) / scale
+        if causal:
+            # mascara causal ancorada no fim do cache (q curto, k longo)
+            klen = k.shape[2]
+            ones = torch.ones((q.shape[2], klen), dtype=torch.bool, device=q.device)
+            m = torch.tril(ones, diagonal=klen - q.shape[2]).unsqueeze(0).unsqueeze(0)
+            scores = scores.masked_fill(~m, float("-inf"))
+        att = torch.softmax(scores, -1)
         out = (att @ v).transpose(1, 2).contiguous().view(b, t, d) @ self.o
         if self.scale_in:
-            return nn.functional.normalize(x + self.alpha * out, dim=-1)  # nGPT/L2
-        return x + out
+            y = nn.functional.normalize(x + self.alpha * out, dim=-1)
+        else:
+            y = x + out
+        return (y, new_cache) if cache is not None else y
 
 
 class Block(nn.Module):
@@ -69,12 +83,16 @@ class Block(nn.Module):
         if scale_in:
             self.beta = nn.Parameter(torch.tensor(0.05))
 
-    def forward(self, x):
-        x = self.att(self.ln(x))
+    def forward(self, x, cache=None, causal=False):
+        ln = self.ln(x)
+        r = self.att(ln, cache=cache, causal=causal)
+        x, new_cache = r if cache is not None else (r, None)
         f = self.ff(self.ln(x))
         if self.scale_in:
-            return nn.functional.normalize(x + self.beta * f, dim=-1)
-        return x + f
+            y = nn.functional.normalize(x + self.beta * f, dim=-1)
+        else:
+            y = x + f
+        return (y, new_cache) if cache is not None else y
 
 
 class LoRALinear(nn.Module):
@@ -151,7 +169,7 @@ class ScaleLM(nn.Module):
                     del blk.att._parameters[attr]
                     setattr(blk.att, attr, LoRALinear(w))
 
-    def forward(self, x):
+    def forward(self, x, causal=False):
         t = x.shape[1]
         h = self.tok(x) + self.pos(torch.arange(t, device=x.device))
         for i, blk in enumerate(self.blocks):
@@ -177,11 +195,51 @@ class ScaleLM(nn.Module):
                             att._parameters[attr] = W
                             setattr(att, attr, W)
                     else:
-                        h = blk(h)
+                        h = blk(h, causal=causal)
             else:
-                h = blk(h)
+                h = blk(h, causal=causal)
         return self.head(self.ln(h))
 
+
+    @torch.no_grad()
+    def forward_cached(self, token, pos, state, mode="last"):
+        """Decode incremental. state = {'caches': {(bi,l):(K,V)}, 'u': tensor}."""
+        b = token.shape[0]
+        h = self.tok(token) + self.pos(torch.tensor([pos], device=token.device))
+        caches = state["caches"]
+        # inicializar caches VAZIOS (shape correta) para que o primeiro passo
+        # tambem retorne K/V e o cache seja realmente mantido
+        if not caches:
+            d0 = self.blocks[0].att.dh
+            h0 = self.blocks[0].att.h
+            empty = (torch.zeros((b, h0, 0, d0), device=token.device, dtype=h.dtype),
+                     torch.zeros((b, h0, 0, d0), device=token.device, dtype=h.dtype))
+            for i, blk in enumerate(self.blocks):
+                if i == 2 and self.variant != "plain":
+                    for l in range(4):
+                        caches[(i, l)] = empty
+                else:
+                    caches[(i, 0)] = empty
+        for i, blk in enumerate(self.blocks):
+            if i == 2 and self.variant != "plain":
+                u = h.detach().clone()  # reinjecao por token (como no forward)
+                for l in range(4):
+                    h = nn.functional.normalize(h + u, dim=-1)
+                    key = (i, l)
+                    cache = caches.get(key) if mode == "per_loop" else caches.get((i, "last"))
+                    r = blk(h, cache=cache)
+                    h, nc = r if cache is not None else (r, None)
+                    if nc is not None:
+                        caches[key] = nc
+                    if mode == "last":
+                        caches[(i, "last")] = nc  # sobrescreve: KV de 1 loop
+            else:
+                c0 = caches.get((i, 0))
+                r = blk(h, cache=c0)
+                h, nc = r if c0 is not None else (r, None)
+                if nc is not None:
+                    caches[(i, 0)] = nc
+        return self.head(self.ln(h))
 
 def lo_steps(model, d):
     # ERRO 24/11 (2a vez): batch reduzido para 8 em GPU cortou tokens vistos
