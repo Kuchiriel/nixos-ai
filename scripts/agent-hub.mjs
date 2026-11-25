@@ -869,6 +869,13 @@ async function handler(req, res) {
       defaultOutputModes: ['text'],
     }), 'application/json');
   }
+  // F30: dashboard do laboratorio do LLM do zero (servido pelo proprio hub)
+  if (req.method === 'GET' && (url.pathname === '/lab' || url.pathname === '/lab/')) {
+    try {
+      const lab = readFileSync(HOME + '/projects/nixos-ai/tools/lab-timeline/index.html', 'utf8');
+      return send(200, lab);
+    } catch { return send(404, 'lab dashboard ausente'); }
+  }
   if (req.method === 'GET' && url.pathname === '/') {
     // (16/11) UI em arquivo proprio (agent-hub-ui.html), com o HTML inline
     // como fallback se o arquivo nao estiver no disco.
