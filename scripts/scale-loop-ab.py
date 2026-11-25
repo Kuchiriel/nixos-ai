@@ -242,6 +242,11 @@ class ScaleLM(nn.Module):
         return self.head(self.ln(h))
 
 def lo_steps(model, d):
+    # F19: orcamento configuravel para descartar under-training em 50M
+    import os
+    env = os.environ.get("SCALE_STEPS", "")
+    if env:
+        return int(env)
     # ERRO 24/11 (2a vez): batch reduzido para 8 em GPU cortou tokens vistos
     # de 2.46M para 0.82M — 150M ficou under-trained (loss 3.35) e parecia
     # "arquitetura pior". Correcao: TOKENS VISTOS constantes em todas escalas.
