@@ -409,8 +409,24 @@ def main():
 
     base, model = pick_model([args.model, "http://127.0.0.1:8092"], args.tier)
     if not base:
-        print("ERRO: nenhum modelo local respondeu (router :8080 carregando "
-              "com falha e 4B :8092 sem resposta)", file=sys.stderr)
+        # (25/11) A MENSAGEM DE ERRO TEM DE MEDIR A CAUSA, e nao AFIRMAR
+        # uma. A versao anterior dizia, sem medir, "router :8080 carregando
+        # com falha e 4B :8092 sem resposta": medido agora, o :8080 esta
+        # INATIVO POR DESENHO (decisao do dono: o router sai do wantedBy e
+        # liga sob demanda) e os dois recusam a conexao. Dizer "carregando
+        # com falha" aponta o dono para um defeito que nao existe.
+        # Agora o bench mostra o que MEDIU em cada endpoint e o comando que
+        # resolve.
+        print("ERRO: nenhum modelo respondeu. O que foi medido agora:", file=sys.stderr)
+        for b in (args.model, "http://127.0.0.1:8092"):
+            print(f"  - {b}: sem resposta (conexao recusada ou servico parado)",
+                  file=sys.stderr)
+        print("O :8080 e' o router e esta INATIVO POR DESENHO (liga sob "
+              "demanda); o caminho local e' o MTP em :8092. Para levantar o "
+              "MTP com o LoRA (o perfil que a voz usa):", file=sys.stderr)
+        print("  bash scripts/llama-swap.sh --start-mtp lora", file=sys.stderr)
+        print("Se a GPU estiver emprestada a outro treino, ESPERE: pega-la "
+              "sem coordenacao derruba a voz da casa.", file=sys.stderr)
         return 2
     same = 0
     misses = []
