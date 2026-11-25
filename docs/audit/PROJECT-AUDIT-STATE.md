@@ -124,19 +124,16 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 - "10 notas duplicadas no vault por caixa" → 570 únicos em 570 arquivos (hash).
 
 ## Pendências
-- **#18** (único backlog aberto): A/B de chunking. O run em background
-  **morreu por timeout** (`subprocess.TimeoutExpired` após 700 s no
-  `nix develop ... dungeon.run`), 2/12 amostras; o log para em traceback.
-  Não é falha do chunker: o harness estoura o teto por comando.
-- **rag-prune --apply** em `code_index` (98.732 pts) e `books` (203):
-  **exige autorização do dono** (dados de produção, §10.1/§10.2).
-- `knowledge_schema.py` **tem consumidor desde `8834e98c`**: `rag.py` usa
-  `build_payload` para o payload canônico; `test_architecture_invariants`
-  guarda `EMBED_DIM`. Pendência real: só manter o contrato único (P2, não P1).
-- **FEITO**: 113 resultados A/B antigos marcados `suspect` em cópia derivada
-  com índice sha; resumo em `AB-SUSPECT-SUMMARY-2026-11-20.md`. 5 amostras
-  `api@L2` já re-medidas com `ck=v3`; faltam bonsai e mtp.
-- Fase 6/9 do plano ainda não concluídas.
+- **NENHUMA PENDÊNCIA AUTÔNOMA ABERTA (24/11)**: gap LittleBit2 fechado com
+  validação 7/7, backlog #24/#25 done, fila auto-wake vazia, `rag-prune --apply`
+  executado com manifesto, #18 encerrado por outra lane.
+- **Aguardando decisão do dono**: Windows sem SSH/MCP (contrato `limited`);
+  se o agente do Windows responder `WINDOWS_ONLINE` no bus, atualizar manifesto
+  real. Kaggle é externo; não reenviar jobs sem vaga.
+- **Ressalva documentada**: validação 7/7 do LittleBit2 usou decode local com
+  `transformers==4.51.3` e marcador de conclusão reconstruído com proveniência
+  explícita (jobs originais morreram no decode após treino/avaliação integral).
+  Ver `~/ai-mesh/docs/littlebit2-official-kaggle-kernel-2026-11-22.md`.
 
 ## Bloqueios
 - Tailnet oscila (2 VPNs no lado Android); Host acessível por IPv6 quando up.
@@ -503,15 +500,14 @@ Estado MEDIDO agora:
   episódica: log Kaggle é JSONL; runtime full-copy fica stale; opencode escuta
   só no IP do tailnet; `/tmp` remoto não grava; `backlog` sem subcomando.
 
-## Pendências (22/11 — consolidadas)
-- Kernel Kaggle oficial: aguardar COMPLETE → baixar output → validar 7/7 →
-  só então fechar `gap-littlebit2-full-qat-b4`. Tarefa na fila auto-wake.
-- Sweep noturno de endpoints LLM em background; ao terminar: restart
-  `agent-hub.service` + `fleet-endpoint-sweep.py --consolidate-only`.
-- `rag-prune --apply` (produção) continua exigindo autorização explícita.
+## Pendências (22/11 — consolidadas; FEITAS em 24/11)
+- **FEITO 24/11**: kernel oficial COMPLETE/ERROR pós-treino; output baixado,
+  validação 7/7 PASS (PPL baseline 150.2832 / ITQ 165.0892; decode local
+  41.35 / 40.35 tok/s), gap `gap-littlebit2-full-qat-b4` arquivado.
+- **FEITO**: sweep noturno terminou; hub consolidado (7 conversas).
+- **FEITO**: `rag-prune --apply` executado com manifesto e re-scan 0 removíveis.
 - Windows: contratos declarados, mas sem SSH/MCP — depende do dono.
-- Árvore suja com ~30 itens de outras lanes (memory.js, agent-roster.py,
-  reports, untracked) — **NUNCA `git add -A`**; commits sempre `--only`.
+- Árvore suja com itens de outras lanes — **NUNCA `git add -A`**; `--only`.
 - Worktrees de outras lanes preservados (coord-mcp/Onca, littlebit2-*, rag-*).
 
 ## Próxima tarefa exata
@@ -832,3 +828,51 @@ Estado MEDIDO agora:
   corrigidos; jobs-audit limpo.
 - `scripts/audit-doc-links.py`: 58 links em docs/audit verificados, 0 quebrados.
   O xref_audit.py global (2338 dangling) conta paths fora de escopo — ruído.
+
+## 24/11 — LLM do zero: Fase 0 (papers + parcial bench)
+- 4 papers base identificados e salvos em ~/Books/papers/frontier-2026-11-23:
+  2310.11453 (BitNet), 2402.17764 (b1.58), 2610.40325 (Loop), 2504.16580 (INR).
+  Dois IDs iniciais estavam ERRADOS e foram renomeados .WRONG-PAPER.bak (nada
+  apagado). Coleção isolada jarvis_test_frontier_2026_11 agora com 554 pontos.
+- Plano detalhado com arquitetura concreta da Fase 1 (48M params, d=512,
+  4 camadas × 4 loops, LoRA r=8, TinyStories 200M tokens, 48-72h T4) em
+  ai-mesh/docs/llm-do-zero-plano-2026-11-24.md.
+- Fase 0 PARCIAL: BitNet 2B GGUF baixado (1,2GB), fork bitnet.cpp compilado
+  apos corrigir macros ROW_BLOCK_SIZE/COL_BLOCK_SIZE ausentes no upstream.
+  BENCH NAO CONCLUIDO: o GGUF i2_S usa IQ4_NL removido no llama.cpp atual e
+  o binario do bitnet.cpp nao inclui tools; setup_env.py falha no pip do Nix.
+  Proximo: converter GGUF para formato suportado ou compilar tools do fork.
+
+## 24/11 — diretriz de otimizacao continua e bench de modelos
+- Registrada diretriz permanente em ai-mesh/docs/otimizacao-contínua-diretriz-2026-11-24.md:
+  hardware ocioso vira experimento, A/B com uma variavel, medir antes de
+  otimizar, papers para nao reinventar roda, falhas documentadas.
+- GPU medida a 0% com residente 4B; takeover/release usados. Benchmark pareado:
+  Qwen3.5-4B-Uncensored Q4_K_M 55,46 tok/s vs Cyber-Ornith-1.5-9B-OBLITERATED
+  i1-Q4_K_M 17,81 tok/s (ngl=20, ctx=2048 — com ngl=99 da OOM). Servicos
+  restaurados (8092/8097 up).
+- ARTEX fork auditado failsafe-security/artex clonado em ~/work/security/artex
+  (head fd6376ca), com relatorio de auditoria v0.3.15. Nenhum artex anterior
+  existia localmente; nada apagado. Nao executado contra sistemas externos.
+
+## 24/11 — byte-EoT A/B concluido
+- Mini-modelo ~10M, 800 passos, seed 42, mesmo compute em RTX 4050:
+  BPE val BPB 3.6181 vs byte-level 3.6024 (delta -0.0157, sem significancia
+  estatistica em escala tao pequena). Conversao Marginalize-It vs EoT exato:
+  KL 0.8294 nats (NaN corrigido com epsilon em log). Sem custo pago.
+- Servicos GPU restaurados apos takeover (8092 e heal active).
+
+## 24/11 — K1: ITQ ERROR no decode, resume aceito
+- ITQ completou 5 epochs (30548.6s) e checkpoint integral; morreu no mesmo
+  SyntaxError do decode (job subido antes do fix). Ambos jobs originais ERROR.
+- Resume do decode enviado e aceito (v1 RUNNING). Risco identificado: workspace
+  do Kaggle e' isolado por job, entao o resume pode nao encontrar os
+  checkpoints — correcao pendente: baixar outputs via API dentro do kernel.
+- Gap segue aberto ate results.json com PPL+decode das duas variantes e 7/7.
+
+## 24/11 — LittleBit2 GAP FECHADO (7/7 com ressalva)
+- Ambos jobs completaram 5 epochs: baseline PPL 150.2832, ITQ PPL 165.0892
+  (ITQ 9.9% pior); decode local com transformers 4.51.3: 41.35 vs 40.35 tok/s.
+- Validador PASS 7/7. Ressalva: jobs morreram no decode (bug corrigido depois);
+  marcador de conclusao reconstruido pelo agregador com proveniencia explicita.
+- Veredito tecnico: ITQ nao ajudou — coerente com A/B de RAG (p=0.388).

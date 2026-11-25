@@ -237,9 +237,12 @@ in {
       ", XF86AudioPause, exec, playerctl play-pause"
       ", XF86AudioPlay,  exec, playerctl play-pause"
       ", XF86AudioPrev,  exec, playerctl previous"
-      # Lid: trava + apaga ao fechar; reacende ao abrir (sem isso o eDP
-      # pode não voltar — tela preta pós-lid).
-      ", switch:on:Lid Switch, exec, loginctl lock-session && hyprctl dispatch dpms off"
+      # (24/11, pedido do dono) A tampa NAO trava a sessao: fechar o
+      # notebook tirava a protecao de tela (e o dono acessa a casa por
+      # remoto). O dpms off continua (apagar a tela economiza bateria) e o
+      # logind tem HandleLidSwitch=ignore no Nix, entao fechar a tampa nao
+      # suspende nem hiberna. O lock de verdade e' manual (SUPER+L).
+      ", switch:on:Lid Switch, exec, hyprctl dispatch dpms off"
       ", switch:off:Lid Switch, exec, hyprctl dispatch dpms on"
     ];
   };

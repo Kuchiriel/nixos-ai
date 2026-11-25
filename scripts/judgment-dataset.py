@@ -81,8 +81,8 @@ def split_context(context):
     return state
 
 
-def to_laya(row):
-    """Uma label -> um item do formato do Laya.
+def to_laya(row, respostas=None, incluir_ambiguos=False):
+    """Um ITEM -> um item do formato do Laya.
 
     (21/11) O `state` carrega o RACIOCINIO DO DONO (o `why_dono`), nao so o
     texto. Sem isso o adapter aprende o rotulo e nao a decisao: treinar assim
@@ -90,11 +90,29 @@ def to_laya(row):
     que o acervo mede (arXiv 2607.28802). E o gabarito (o `key`) e' o
     porque DE QUEM ESCREVEU o item — nenhum dos dois entra no state, senao o
     modelo aprenderia a copiar a resposta da casa.
+
+    (24/11) O ITEM REPETIDO. A casa pede ao dono que juzgue alguns itens
+    DUAS VEZES (e' assim que se mede a repetibilidade dele, arXiv
+    2510.07978) e o `to_laya` converte CADA LINHA em um item: medido, o
+    mesmo `_id` entrava no treino com o MESMO contexto e DOIS alvos
+    diferentes (NOT e SLIGHTLY) — ruido puro, e o item repetido e'
+    justamente o item ambiguo. Pelo paper novo (arXiv 2511.14117) a
+    distribuicao das anotacoes e' o ground truth, nao um rotulo colapsado:
+    com UM anotador, se ele deu respostas DIFERENTES, o item nao vira alvo
+    de treino (vai para o relatorio de ambiguidade, onde e' util); se ele
+    deu a MESMA, o item vale UM item.
     """
     answer = str(row.get("answer", "")).strip()
     key = LEVEL_TO_KEY.get(answer)
     if key is None:
         return None
+    # (24/11) as respostas do dono sobre ESTE item (todas as linhas com o
+    # mesmo id): se ele se decidiu (uma resposta so) vale um item; se nao,
+    # o item e' ambiguo e nao entra no treino.
+    if respostas:
+        distintas = {str(r).strip() for r in respostas if str(r).strip()}
+        if len(distintas) > 1 and not incluir_ambiguos:
+            return None
     state = split_context(row.get("context", ""))
     why = str(row.get("why_dono") or "").strip()
     if why:
@@ -113,7 +131,8 @@ def write_jsonl(path, rows):
             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
-def build(out_dir, heldout_path, seed=7, test_ratio=0.25, calib=8):
+def build(out_dir, heldout_path, seed=7, test_ratio=0.25, calib=8,
+          incluir_ambiguos=False):
     labels = load_jsonl(LABELS)
     items = load_jsonl(ITEMS)
     # os itens de pratica entram com o gabarito como label (o dono ainda nao
@@ -134,7 +153,42 @@ def build(out_dir, heldout_path, seed=7, test_ratio=0.25, calib=8):
 
     # ZERO LEAKAGE: o que esta no held-out NUNCA entra no treino
     train_src = [r for r in labels if str(r.get("id")) not in heldout_ids]
-    laya = [x for x in (to_laya(r) for r in train_src) if x]
+
+    # (24/11) AS RESPOSTAS DO DONO POR ITEM. Um item juzgado mais de uma
+    # vez e' o item AMBIGUO (o dono nao se decidiu nele): pelo paper novo
+    # (arXiv 2511.14117) a distribuicao e' o ground truth, nao um rotulo
+    # colapsado — com UM anotador, respostas diferentes NAO viram dois alvos
+    # de treino (medido: o mesmo _id entrava com NOT e SLIGHTLY no mesmo
+    # train.jsonl, o mesmo contexto com dois rotulos = ruido puro).
+    respostas_por_item = {}
+    for r in train_src:
+        rid = str(r.get("id") or "")
+        if rid:
+            respostas_por_item.setdefault(rid, []).append(str(r.get("answer")))
+    ambiguos = {rid for rid, rs in respostas_por_item.items()
+                if len({x.strip() for x in rs if str(x).strip()}) > 1}
+
+    # (24/11) UM ITEM = UMA LINHA. As repeticoes do mesmo item (o dono
+    # juzgando duas vezes) viravam DOIS itens identicos no dataset: medido,
+    # o `_id` entrava duas vezes com o mesmo estado e o mesmo rotulo
+    # (peso dobrado sem motivo). Aqui cada item vira UMA linha — a mais
+    # recente (a resposta mais nova do dono) — e o `to_laya` decide se o
+    # item e' ambiguo (respostas diferentes ⇒ nao entra).
+    ultima_por_item = {}
+    for r in train_src:
+        rid = str(r.get("id") or "")
+        if rid:
+            ultima_por_item[rid] = r
+    laya = []
+    for rid, r in ultima_por_item.items():
+        item = to_laya(r, respostas=respostas_por_item.get(rid),
+                        incluir_ambiguos=incluir_ambiguos)
+        if item:
+            laya.append(item)
+    if ambiguos and not incluir_ambiguos:
+        print(f"itens AMBIGUOS (o dono deu respostas diferentes) fora do "
+              f"treino: {len(ambiguos)} — vao para o relatorio de "
+              f"scripts/ambiguidade.py; use --incluir-ambiguos so para MEDIR")
     held_laya = [x for x in (to_laya(r) for r in heldout) if x]
 
     # (14/11) O CORTE E' POR GRUPO DE ITEM, NAO POR LINHA. O dono foi
@@ -298,14 +352,20 @@ def self_test():
 
     # (14/11) prova do caso que motivou o corte: o mesmo item julgado duas
     # vezes (o dono medindo a propria repetibilidade) fica no mesmo arquivo.
+    # (24/11) A REGRA NOVA: um item repetido ESTAVEL (respostas iguais) vira
+    # UM item so; um item repetido AMBIGUO (respostas diferentes) nao vira
+    # item de treino nenhum — o mesmo contexto com dois alvos e' ruido.
     tmp2 = Path("/tmp/opencode/judgment-ds-selftest2")
     tmp2.mkdir(parents=True, exist_ok=True)
     write_jsonl(tmp2 / "heldout.jsonl", [])
     dup = tmp2 / "labels.jsonl"
     write_jsonl(dup, [
+        # r1: duas respostas IGUAIS (o dono se decidiu) => UM item
         {"id": "r1", "context": "Query: q\nPage: p", "answer": "3"},
-        {"id": "r1", "context": "Query: q\nPage: p", "answer": "2"},
+        {"id": "r1", "context": "Query: q\nPage: p", "answer": "3"},
+        # r2: duas respostas DIFERENTES (ambiguo) => NENHUM item
         {"id": "r2", "context": "Query: q2\nPage: p2", "answer": "0"},
+        {"id": "r2", "context": "Query: q2\nPage: p2", "answer": "1"},
         {"id": "r3", "context": "Query: q3\nPage: p3", "answer": "1"},
     ])
     old_labels, old_items = LABELS, ITEMS
@@ -313,6 +373,11 @@ def self_test():
     try:
         out2, ov2 = build(tmp2 / "out", tmp2 / "heldout.jsonl", test_ratio=0.34,
                           calib=1)
+        # (24/11) e, se forcado para MEDIR, o item ambiguo volta (com os
+        # dois alvos conflitantes). A chamada precisa FICAR dentro do try:
+        # fora dele o build le o LABELS real (vazio) e a prova mente.
+        out3, _ = build(tmp2 / "out-inc", tmp2 / "heldout.jsonl",
+                        test_ratio=0.34, calib=1, incluir_ambiguos=True)
     finally:
         LABELS, ITEMS = old_labels, old_items
     assert not ov2, f"vazamento com repeticao: {ov2}"
@@ -320,8 +385,20 @@ def self_test():
     for fname in ("train.jsonl", "test.jsonl", "calib.jsonl"):
         for r in load_jsonl(out2 / fname):
             where.setdefault(str(r["_id"]), set()).add(fname)
+    # (24/11) o item repetido ESTAVEL fica num arquivo so (e uma vez so)
     dup_files = where.get("r1", set())
     assert len(dup_files) == 1, f"o item repetido foi dividido: {dup_files}"
+    n_r1 = sum(1 for fname in ("train.jsonl", "test.jsonl", "calib.jsonl")
+               for r in load_jsonl(out2 / fname) if str(r["_id"]) == "r1")
+    assert n_r1 == 1, f"o item repetido estavel entrou {n_r1}x (deve ser 1)"
+    # (24/11) e o item repetido AMBIGUO nao entra no dataset
+    assert "r2" not in where, f"o item ambiguo entrou: {where.get('r2')}"
+    onde3 = set()
+    for fname in ("train.jsonl", "test.jsonl", "calib.jsonl"):
+        for r in load_jsonl(out3 / fname):
+            if str(r["_id"]) == "r2":
+                onde3.add(fname)
+    assert onde3, "com --incluir-ambiguos o item ambiguo devia voltar"
     print("SELF-TEST ok: formato Laya, held-out fora do treino, sem vazamento, "
           "opcoes e respostas validas, e o item julgado duas vezes fica no "
           "mesmo arquivo")
@@ -342,6 +419,10 @@ def main():
                          "(estratificado por classe, deterministico)")
     ap.add_argument("--force", action="store_true",
                     help="sobrescreve o held-out existente")
+    ap.add_argument("--incluir-ambiguos", action="store_true",
+                    help="inclui os itens que o dono juzgou com respostas "
+                         "diferentes (alvos conflitantes): so para MEDIR, "
+                         "nunca para treinar")
     args = ap.parse_args()
     if args.self_test:
         return self_test()
@@ -357,7 +438,8 @@ def main():
               "--heldout data/judgments/heldout.jsonl")
         return 0
     out, overlaps = build(args.out, args.heldout, args.seed, args.test_ratio,
-                          args.calib)
+                          args.calib,
+                          incluir_ambiguos=args.incluir_ambiguos)
     if overlaps:
         print("ERRO: vazamento entre os arquivos; nao treine com isso.",
               file=sys.stderr)
