@@ -252,7 +252,9 @@ def lo_steps(model, d):
     # "arquitetura pior". Correcao: TOKENS VISTOS constantes em todas escalas.
     # 800 passos x batch 24 x 128 = 2.457M tokens (referencia 50M).
     # Com batch 8: 800*24/8 = 2400 passos para os mesmos 2.457M tokens.
-    BATCH = 8   # fixo para caber na GPU com residentes
+    # F21: batch configuravel para caber junto com RAG e job de outro agente
+    import os as _os
+    BATCH = int(_os.environ.get("SCALE_BATCH", "8"))
     TARGET_TOKENS = 800 * 24 * 128
     return max(800, TARGET_TOKENS // (BATCH * 128))
 
@@ -281,9 +283,10 @@ def run(scale, variant, device, seed_v):
     t0 = time.perf_counter(); model.train(); seen = 0
     losses = []
     for step in range(1, steps+1):
-        st = torch.randint(0, len(ids)-128-1, (8,))
-        x = torch.tensor([ids[k:k+128] for k in st.tolist()[:8]], device=device)
-        y = torch.tensor([ids[k+1:k+1+128] for k in st.tolist()[:8]], device=device)
+        _b = int(_os.environ.get("SCALE_BATCH", "8"))
+        st = torch.randint(0, len(ids)-128-1, (_b,))
+        x = torch.tensor([ids[k:k+128] for k in st.tolist()[:_b]], device=device)
+        y = torch.tensor([ids[k+1:k+1+128] for k in st.tolist()[:_b]], device=device)
         with torch.autocast(device_type=device, dtype=torch.bfloat16):
             loss = nn.functional.cross_entropy(model(x).reshape(-1, len(chars)).float(), y.reshape(-1))
         opt.zero_grad(); loss.backward(); opt.step()
