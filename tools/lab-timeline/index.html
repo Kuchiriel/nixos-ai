@@ -36,9 +36,16 @@ function plot(k){
   Plotly.react('chart',data,{barmode:'group',paper_bgcolor:'#161b22',plot_bgcolor:'#161b22',
     font:{color:'#e6edf3'},margin:{b:160},xaxis:{tickangle:-40},yaxis:{title:k}});
 }
-function gen(){ document.getElementById('out').textContent =
- 'Demo interativa sera ligada ao checkpoint quando o corpus word-level (F31) estiver pronto.\n'+
- 'Ate la: o laboratorio mede mecanismos — veja os graficos acima.'; }
+async function gen(){
+  const q = encodeURIComponent(document.getElementById('prompt').value);
+  document.getElementById('out').textContent='gerando...';
+  try {
+    const r = await fetch('/lab/generate?prompt='+q+'&n=80');
+    const d = await r.json();
+    document.getElementById('out').textContent =
+      d.prompt + ' → ' + d.generated + '\n\n['+d.model+' · '+d.tokens+' tokens]';
+  } catch(e) { document.getElementById('out').textContent='erro: '+e; }
+}
 function table(){
   const rows=D.slice(-30).reverse();
   document.getElementById('table').innerHTML='<table><tr><th>frente</th><th>escala</th><th>variante</th><th>val</th><th>acc</th><th>ECE</th></tr>'+
