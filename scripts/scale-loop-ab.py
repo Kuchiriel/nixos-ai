@@ -268,7 +268,7 @@ def run(scale, variant, device, seed_v):
     steps = lo_steps(model, params)
     # foreach=False evita o pico do _multi_tensor_adam (foi onde 300M OOMou)
     # F7: MESMO otimizador em 150M e 300M (controla o confound medido)
-    if scale in (150, 300):
+    if scale in (50, 150, 300):
         opt = torch.optim.Adafactor(model.parameters(), lr=3e-4,
                                     beta2_decay=-0.8, eps=(None, 0.001))
     else:
