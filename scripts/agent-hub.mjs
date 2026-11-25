@@ -869,6 +869,21 @@ async function handler(req, res) {
       defaultOutputModes: ['text'],
     }), 'application/json');
   }
+  // F33: geracao real com o checkpoint word-level (playground do /lab)
+  if (req.method === 'GET' && url.pathname === '/lab/generate') {
+    const prompt = String(url.searchParams.get('prompt') || 'Once upon a time').slice(0, 120);
+    const n = Math.min(120, Math.max(10, parseInt(url.searchParams.get('n') || '60', 10)));
+    try {
+      const { execFileSync } = await import('node:child_process');
+      const out = execFileSync('/home/nixos/.venvs/finetune/bin/python', [
+        HOME + '/projects/nixos-ai/scripts/f33-generate.py', prompt, String(n),
+      ], { encoding: 'utf8', timeout: 60000,
+           env: { ...process.env,
+                  LD_LIBRARY_PATH: '/run/opengl-driver/lib:/run/current-system/sw/share/nix-ld/lib',
+                  TRITON_LIBCUDA_PATH: '/run/opengl-driver/lib' } });
+      return send(200, out.trim());
+    } catch (e) { return send(500, JSON.stringify({error: String(e).slice(0,200)})); }
+  }
   // F30: dashboard do laboratorio do LLM do zero (servido pelo proprio hub)
   if (req.method === 'GET' && (url.pathname === '/lab' || url.pathname === '/lab/')) {
     try {
