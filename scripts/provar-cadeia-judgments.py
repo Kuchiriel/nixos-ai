@@ -316,6 +316,47 @@ def main():
         ok("o registro real nao foi criado pela prova", True,
            "(o dono ainda nao julgou nada: o arquivo nao existe)")
 
+    # ── 8) a pratica pode ser ENSAIADA sem tocar no registro ──────────────
+    # (25/11) O `uhrs-practice.py` ganhou `--dry-run` e `--labels` porque
+    # QUALQUER teste da pratica gravava no registro real do dono (medido: um
+    # teste meu criou uma label de teste no `labels.jsonl`, que nao existia
+    # antes — arquivada com read-back e removida). O `uhrs-capture.py` ja
+    # tinha os dois; a pratica nao tinha nenhum. Aqui a prova garante que
+    # as duas formas NAO gravam no registro do dono.
+    print("\n8) A PRATICA PODE SER ENSAIADA SEM GRAVAR NO REGISTRO DO DONO:")
+    up = mod("up", REPO / "scripts/uhrs-practice.py")
+    antes = (REPO / "data/judgments/labels.jsonl")
+    hash_antes = hashlib.sha256(antes.read_bytes()).hexdigest() \
+        if antes.is_file() else "(nao existe)"
+    # (a) o dry-run: nao grava nada
+    r_dry = subprocess.run(
+        [sys.executable, str(REPO / "scripts/uhrs-practice.py"),
+         "--items", "1", "--answer", "3", "--dry-run",
+         "--items-file", str(REPO / "data/judgments/uhrs-practice-items.jsonl")],
+        capture_output=True, text=True, timeout=300, cwd=str(REPO))
+    ok("o --dry-run roda", r_dry.returncode == 0,
+       (r_dry.stdout or r_dry.stderr).strip()[-70:])
+    hash_depois = hashlib.sha256(antes.read_bytes()).hexdigest() \
+        if antes.is_file() else "(nao existe)"
+    ok("o --dry-run NAO gravou no registro do dono",
+       hash_depois == hash_antes, f"{hash_depois[:16]}")
+    # (b) o --labels: grava em outro arquivo
+    outro = tmp / "labels-do-ensaio.jsonl"
+    r_out = subprocess.run(
+        [sys.executable, str(REPO / "scripts/uhrs-practice.py"),
+         "--items", "1", "--answer", "3", "--labels", str(outro),
+         "--items-file", str(REPO / "data/judgments/uhrs-practice-items.jsonl")],
+        capture_output=True, text=True, timeout=300, cwd=str(REPO))
+    ok("o --labels roda", r_out.returncode == 0,
+       (r_out.stdout or r_out.stderr).strip()[-70:])
+    ok("o --labels gravou NO ARQUIVO REDIRECIONADO",
+       outro.is_file() and len(outro.read_text().splitlines()) == 1,
+       f"{len(outro.read_text().splitlines()) if outro.is_file() else 0} linha(s)")
+    hash_final = hashlib.sha256(antes.read_bytes()).hexdigest() \
+        if antes.is_file() else "(nao existe)"
+    ok("o registro do dono continua INTACTO depois das duas formas",
+       hash_final == hash_antes, f"{hash_final[:16]}")
+
     print(f"\n{'PROVA OK' if not FALHAS else 'PROVA COM FALHAS'}: "
           f"{PASSOS} ok, {len(FALHAS)} falha(s)")
     for f in FALHAS:
