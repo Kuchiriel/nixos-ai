@@ -96,6 +96,8 @@ def main() -> int:
     parser.add_argument("--target-tokens", type=int, default=TARGET_TOKENS)
     parser.add_argument("--depth", type=int, default=1768, help="1216=150M, 1768=300M")
     parser.add_argument("--variant", choices=["plain", "ngpt_only", "loop_spec"], default="loop_spec")
+    parser.add_argument("--causal-train", action="store_true",
+                        help="train with the same causal mask used by KV inference")
     parser.add_argument("--modes", default="full,per_loop,last")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--out", required=True)
@@ -137,7 +139,8 @@ def main() -> int:
         x = torch.tensor([ids[k:k + 128] for k in offsets.tolist()], device=args.device)
         y = torch.tensor([ids[k + 1:k + 129] for k in offsets.tolist()], device=args.device)
         with torch.autocast(device_type=args.device, dtype=torch.bfloat16):
-            loss = F.cross_entropy(model(x).reshape(-1, len(chars)).float(), y.reshape(-1))
+            logits = model(x, causal=True) if args.causal_train else model(x)
+            loss = F.cross_entropy(logits.reshape(-1, len(chars)).float(), y.reshape(-1))
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -232,6 +235,7 @@ def main() -> int:
             "depth": args.depth,
             "params": params,
             "steps": args.steps,
+            "causal_train": args.causal_train,
             "tokens_until_answer": tokens_to_answer,
         },
         "seed": args.seed,

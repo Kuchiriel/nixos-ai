@@ -187,7 +187,7 @@ class ScaleLM(nn.Module):
                             # Parameter: apagar o slot e setattr normal (F1)
                             del att._parameters[attr]
                             setattr(att, attr, mod)
-                        h = blk(h)
+                        h = blk(h, causal=causal)
                         for attr, W in saved.items():
                             # devolver o slot de Parameter antes de restaurar
                             mod = getattr(att, attr)
