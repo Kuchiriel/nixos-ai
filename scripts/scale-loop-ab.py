@@ -16,6 +16,7 @@ Papers: arXiv 2611.03998 (Dory/NVIDIA), 2610.40325 (Meta loop),
 from __future__ import annotations
 import argparse, json, math, random, time
 from pathlib import Path
+import os as _os
 import torch
 from torch import nn
 
@@ -126,7 +127,7 @@ class ScaleLM(nn.Module):
         self.d, self.variant = d, variant
         self.scale_in = variant in ("loop_full", "ngpt_only", "loop_spec", "kv_last")
         self.tok = nn.Embedding(vocab, d)
-        self.pos = nn.Embedding(256, d)
+        self.pos = nn.Embedding(512, d)  # F24: 64 ctx + 256 gerados = 320 > 256
         n_in, n_rec, n_out = 2, 4, 2
         # heads divisor exato de d (d=1768 nao e' divisivel por 27 -> shape bug)
         heads = 8
@@ -243,8 +244,7 @@ class ScaleLM(nn.Module):
 
 def lo_steps(model, d):
     # F19: orcamento configuravel para descartar under-training em 50M
-    import os
-    env = os.environ.get("SCALE_STEPS", "")
+    env = _os.environ.get("SCALE_STEPS", "")
     if env:
         return int(env)
     # ERRO 24/11 (2a vez): batch reduzido para 8 em GPU cortou tokens vistos
@@ -253,7 +253,6 @@ def lo_steps(model, d):
     # 800 passos x batch 24 x 128 = 2.457M tokens (referencia 50M).
     # Com batch 8: 800*24/8 = 2400 passos para os mesmos 2.457M tokens.
     # F21: batch configuravel para caber junto com RAG e job de outro agente
-    import os as _os
     BATCH = int(_os.environ.get("SCALE_BATCH", "8"))
     TARGET_TOKENS = 800 * 24 * 128
     return max(800, TARGET_TOKENS // (BATCH * 128))
