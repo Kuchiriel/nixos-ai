@@ -34,6 +34,7 @@ import pathlib
 import subprocess
 import sys
 import time
+import urllib.request
 from collections import Counter
 
 REPO = pathlib.Path("/home/nixos/projects/nixos-ai")
@@ -43,6 +44,54 @@ sys.path.insert(0, str(REPO / "benchmarks/voice"))
 
 LEVEL_NAMES = {"3": "highly relevant", "2": "moderately relevant",
                "1": "slightly relevant", "0": "not relevant"}
+
+
+def reexecutar_com_o_ambiente_correto():
+    """Reexecuta o bench no ambiente do duplex VIVO, se o atual nao servir.
+
+    (25/11) MEDIDO: o comando que os docs mandavam
+    (`python3 benchmarks/voice/bench-gate-voz.py`) MORREVA com
+    "ModuleNotFoundError: No module named 'numpy'". E com o venv do karaok
+    sem o `LD_LIBRARY_PATH`, morria com "libstdc++.so.6: cannot open
+    shared object file". As DUAS coisas sao resolvidas pelo mesmo caminho
+    que o duplex vivo usa (medido no processo vivo):
+      - o interpretador: `~/projects/karaok/.venv/bin/python3`;
+      - as libs: `scripts/asrd_env.py --print` (o mesmo resolver do
+        `duplex-voice-run.sh`).
+
+    Aqui o bench se reexecuta sozinho, para o comando documentado
+    funcionar. Se nao der para reexecutar, a mensagem diz o comando
+    exato, em vez de um traceback de import.
+    """
+    if os.environ.get("BENCH_GATE_VOZ_REEXEC") == "1":
+        return None
+    # o python atual ja serve? (numpy e as libs do sistema)
+    try:
+        import numpy  # noqa: F401
+        import sounddevice  # noqa: F401
+        return None
+    except Exception as exc:
+        primeiro = str(exc).splitlines()[0][:90]
+    py = pathlib.Path.home() / "projects/karaok/.venv/bin/python3"
+    if not py.is_file():
+        print(f"ERRO: este bench precisa do venv do karaok (numpy): {primeiro}\n"
+              f"       o interpretador nao esta em {py}", file=sys.stderr)
+        return None
+    env = dict(os.environ)
+    try:
+        ld = subprocess.run([sys.executable, str(REPO / "scripts/asrd_env.py"),
+                             "--print"], capture_output=True, text=True,
+                            timeout=120).stdout.strip()
+    except Exception:
+        ld = ""
+    if ld:
+        env["LD_LIBRARY_PATH"] = ld + (
+            (":" + env["LD_LIBRARY_PATH"]) if env.get("LD_LIBRARY_PATH") else "")
+    env["BENCH_GATE_VOZ_REEXEC"] = "1"
+    print(f"[bench-gate-voz] reexecutando no ambiente do duplex vivo "
+          f"({py})...", file=sys.stderr)
+    return subprocess.run([str(py), str(pathlib.Path(__file__).resolve())] +
+                          sys.argv[1:], env=env).returncode
 
 
 def carregar_heldout():
@@ -114,7 +163,34 @@ def transcrever(wav, modelo=None):
     return str(j.get("text") or "").strip()
 
 
+def classificador_disponivel(base, timeout=20.0):
+    """O classificador responde? (o veredito de transporte, medido ANTES)
+
+    (25/11) MEDIDO: com o MTP parado, o bench NAO falhava — ele media
+    39 itens, o classificador devolvia `None` (conexao recusada) e a
+    saida era "voz: 0/39 = 0.0%", um numero FALSO que parece "o gate
+    quebrou". E' a mesma regra da lane: um timeout que corta o rotulo
+    produz veredito invalido; uma conexao recusada tambem. A medicao
+    agora para ANTES, com o comando que resolve.
+    """
+    try:
+        req = urllib.request.Request(base.rstrip("/") + "/v1/models",
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode())
+        return bool([m.get("id") for m in (data.get("data") or []) if m.get("id")])
+    except Exception:
+        return False
+
+
 def main():
+    # (25/11) O comando documentado precisa FUNCIONAR: se o interpretador
+    # atual nao tem as libs do duplex, o bench se reexecuta no ambiente
+    # certo (o do processo vivo) em vez de morrer com um traceback.
+    rc = reexecutar_com_o_ambiente_correto()
+    if rc is not None:
+        return rc
+
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--base", default="http://127.0.0.1:8092")
@@ -131,6 +207,22 @@ def main():
         print("ERRO: o whisper da casa (:8097) nao responde — o ASR do "
               "cliente esta parado; sem ele nao ha canal de voz para medir.",
               file=sys.stderr)
+        return 2
+
+    # (25/11) O CLASSIFICADOR TEM DE RESPONDER ANTES DE MEDIR. Sem esta
+    # checagem, um MTP parado media "0/39" (o `None` da conexao recusada
+    # entrava como resposta errada do modelo) — um numero falso que
+    # parece "o gate quebrou" e que decide o modo de delegacao.
+    if not classificador_disponivel(args.base):
+        print(f"ERRO: o classificador ({args.base}) nao responde. A medicao "
+              f"NAO foi feita: um classificador parado devolveria `None` "
+              f"para todos os itens e o resultado sairia 0%, que e' um numero "
+              f"FALSO (veredito de transporte virando veredito de modelo).",
+              file=sys.stderr)
+        print("Para levantar o MTP (perfil lora, :8092): "
+              "bash scripts/llama-swap.sh --start-mtp lora", file=sys.stderr)
+        print("Se a GPU estiver emprestada a outro treino, ESPERE: pega-la "
+              "sem coordenacao derruba a voz da casa.", file=sys.stderr)
         return 2
 
     # o classificador (o mesmo do bench_heldout3)

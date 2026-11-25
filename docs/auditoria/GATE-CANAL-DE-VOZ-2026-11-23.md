@@ -72,3 +72,24 @@ python3 benchmarks/voice/bench-gate-voz.py --json /tmp/opencode/gate-voz.json
 
 Instrumento: `benchmarks/voice/bench-gate-voz.py` (sintetiza, transcreve,
 classifica nas duas condições e mede a perda de palavras).
+
+**Dois requisitos que o bench confere sozinho (25/11):**
+
+1. **O classificador tem de responder.** Com o MTP parado, o bench mede
+   39 itens, o classificador devolve `None` (conexão recusada) e a saída
+   vira **"voz: 0/39 = 0,0 %"** — um número **falso** que parece "o gate
+   quebrou" e que decide o modo de delegação. Agora o bench **recusa
+   medir** (rc 2) e diz o comando que resolve
+   (`bash scripts/llama-swap.sh --start-mtp lora`). É a mesma regra da
+   lane: timeout que corta o rótulo é veredito inválido, conexão recusada
+   também.
+2. **O ambiente é o do duplex vivo.** O comando acima agora funciona
+   direto: o bench se reexecuta sozinho no venv do karaok com as libs
+   resolvidas por `scripts/asrd_env.py --print` (antes o comando
+   documentado morria em `No module named 'numpy'`).
+
+> Os números desta página (texto 29/39, voz 24/39) **continuam válidos**:
+> eles foram medidos com o classificador de pé. Qualquer rodada nova
+> precisa do `:8092` **e** do `:8097` ao mesmo tempo, e a GPU da casa não
+> comporta o A/B do lab e a voz juntos (medido em 25/11: o MTP foi parado
+> pela unit do lab às 13:46, 18:40 e 20:08, e a voz caiu em cada parada).
