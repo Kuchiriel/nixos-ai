@@ -41,6 +41,23 @@ log() { printf '%s\n' "$*"; }
 vram() { nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' '; }
 endpoint_ok() { timeout 12 curl -s -m 10 "http://127.0.0.1:$1/v1/models" 2>/dev/null | grep -q '"id"'; }
 
+# (25/11) As units do MTP sao de SISTEMA, entao `systemctl start` sem
+# privilegio falha com "Access denied as the requested operation requires
+# interactive authentication" (medido: o --start-mtp devolvia "falha no
+# start" e o :8092 continuava down). Aqui o comando vai sem privilegio
+# primeiro (funciona quando a unit e' do --user, e e' o que o self-test
+# com systemctl falso usa) e cai para `sudo -n` quando o primeiro falha.
+sysctl() {
+  if systemctl "$@" >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+    sudo -n systemctl "$@" >/dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
 mtp_pid() {
   pgrep -f "llama-server -m ${MTP_MODEL}" 2>/dev/null | head -1
 }
@@ -76,7 +93,7 @@ case "${1:---list}" in
     # systemd) e deixa o dono do processo inconsistente.
     for u in llama-uncensored-4b.service llama-uncensored-4b-code.service; do
       if [ "$(systemctl is-active "$u" 2>/dev/null)" = "active" ]; then
-        systemctl stop "$u" >/dev/null 2>&1
+        sysctl stop "$u"
         log "  parando $u — o small model da frota cai ate o --start-mtp"
       fi
     done
@@ -106,7 +123,12 @@ case "${1:---list}" in
       PORTA="$MTP_PORT"; UNIT="llama-uncensored-4b.service"
     fi
     log "subindo o MTP perfil=$PERFIL (porta $PORTA) via $UNIT..."
-    if ! systemctl start "$UNIT" >/dev/null 2>&1; then
+    # (25/11) O start-limit: se a unit falhou varias vezes em pouco tempo,
+    # o systemd recusa o start ("Start request repeated too quickly" +
+    # "Failed with result 'start-limit-hit'", medido no journal de 25/11
+    # 06:09). O reset-failed limpa o contador; o start vem logo depois.
+    sysctl reset-failed "$UNIT"
+    if ! sysctl start "$UNIT"; then
       log "  falha no start de $UNIT (systemctl)"
       exit 1
     fi
