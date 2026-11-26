@@ -33,6 +33,7 @@ def build_tokens(topk=10000, limit=20_000_000):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--corpus", default="")
+    ap.add_argument("--npy", default="")
     ap.add_argument("--steps", type=int, default=2400)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--d", type=int, default=320)
@@ -49,7 +50,14 @@ def main():
     ScaleLM = runpy.run_path(str(SRC))["ScaleLM"]
     random.seed(a.seed); torch.manual_seed(a.seed)
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(a.seed)
-    if a.corpus:
+    import numpy as np
+    if a.npy:
+        import json as _json
+        cd = _json.load(open(a.npy.replace(".npy", "-stats.json")))
+        seq = np.load(a.npy, mmap_mode="r")
+        vocab = cd["vocab"]; n = int(len(seq) * 0.99)
+        print(_json.dumps({"npy": a.npy, "tokens": len(seq)}), flush=True)
+    elif a.corpus:
         cd = torch.load(a.corpus, map_location="cpu", weights_only=False)
         seq = cd["seq"].tolist(); vocab = cd["vocab"]
         n = cd["n_train"]
@@ -68,8 +76,8 @@ def main():
     model.train()
     for step in range(1, a.steps + 1):
         st = torch.randint(0, len(train) - a.seq - 1, (a.batch,))
-        x = torch.tensor([train[k:k+a.seq] for k in st.tolist()], device=a.device)
-        y = torch.tensor([train[k+1:k+1+a.seq] for k in st.tolist()], device=a.device)
+        x = torch.tensor(np.asarray([train[k:k+a.seq] for k in st.tolist()]), dtype=torch.long, device=a.device)
+        y = torch.tensor(np.asarray([train[k+1:k+1+a.seq] for k in st.tolist()]), dtype=torch.long, device=a.device)
         # scheduled sampling: p decai de 1.0 -> 0.0 ao longo do treino
         p = 1.0 - step / a.steps
         if (not a.no_ss) and random.random() < p and step % 4 == 0:
@@ -100,8 +108,8 @@ def main():
             xs = [val[k+j:k+j+a.seq] for j in range(0, a.seq*a.batch, a.seq)]
             xs = [z for z in xs if len(z) == a.seq]
             if len(xs) < 2: break
-            x = torch.tensor(xs, device=a.device)
-            y = torch.tensor([val[k+j+1:k+j+1+a.seq] for j in range(0, a.seq*len(xs), a.seq)], device=a.device)
+            x = torch.tensor(np.asarray(xs), dtype=torch.long, device=a.device)
+            y = torch.tensor(np.asarray([val[k+j+1:k+j+1+a.seq] for j in range(0, a.seq*len(xs), a.seq)]), dtype=torch.long, device=a.device)
             lg = model(x, causal=True)
             vl += float(F.cross_entropy(lg.reshape(-1,vocab).float(), y.reshape(-1), reduction="sum"))
             corr += int((lg.argmax(-1) == y).sum())
@@ -109,7 +117,7 @@ def main():
     val_loss = vl/max(vn,1)
     r = {"seed": a.seed, "steps": a.steps, "vocab": vocab, "tokens": len(seq),
          "d": a.d, "scheduled_sampling": not a.no_ss,
-         "corpus": a.corpus or str(CORPUS),
+         "corpus": a.npy or a.corpus or str(CORPUS),
          "lr": a.lr, "warmup": a.warmup,
          "val_loss": round(val_loss,4), "perplexity": round(math.exp(min(val_loss,20)),3),
          "acc": round(corr/max(vn,1),4), "seconds": round(time.perf_counter()-t0,1)}
