@@ -65,8 +65,19 @@ mkdir -p "$(dirname "$LOG")" /tmp/opencode
 # (VIS_MAX_PER_HOUR, default 12/h com gap de 3 min) ja limita o volume:
 # isto e' uma amostra legivel, o arquivo inteiro continua no LOG e no bus.
 # Sem script novo: reusa o vis-enqueue que ja existe.
+#
+# (24/11, medido) A FILA VIROU UM LOG E ATRASOU O DONO. Medido: 88 itens, dos
+# quais 80 eram mensagens de agente e 73 dessas eram AVISO/NOTA (nao pediam
+# acao nenhuma); a fila esvazia UM item por idle, entao os 8 pedidos de
+# acao reais estavam atras de 73 avisos. Agora so entra na fila visivel o
+# que PEDE ACAO (o tipo `ask`): aviso e nota ficam no LOG e no bus (onde ja
+# estavam), e nao viram um /goal na sessao do dono. O digest/filha real
+# volta a ser o que o dono ve primeiro.
 vis_visible() {
     local rem="$1" tipo="$2" alvo="$3" texto="$4" sessao_alvo="$5"
+    # so pedido de acao vira tarefa visivel; aviso/nota e' informacao, e o
+    # dono le isso no bus e no hub.
+    [ "$tipo" = "ask" ] || return 0
     command -v "$HOME/bin/vis-enqueue" >/dev/null 2>&1 || return 0
     local alvo_vis=""
     alvo_vis=$(cat "$HOME/.local/state/jarvis/vis-session" 2>/dev/null)

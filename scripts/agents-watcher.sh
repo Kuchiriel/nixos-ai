@@ -100,6 +100,11 @@ GUARD_SINCE="${AGENTS_GUARD_SINCE:-20}"
 GUARD_EVERY="${AGENTS_GUARD_EVERY:-1}"
 # auto-captura de erros de CLI a cada N ciclos (silencioso, nunca acorda ninguem)
 PAINS_EVERY="${AGENTS_PAINS_EVERY:-10}"
+# (25/11) prune do roster a cada N ciclos: claims mortos acumulavam porque
+# nada chamava o prune (medido: 11 de 14 entradas mortas). 30 ciclos = ~30 min
+# com o ciclo de 60 s; o prune so remove quem esta morto ha mais que o
+# STALE_AFTER do roster, entao nao compete com um spawn recem-acordado.
+PRUNE_EVERY="${AGENTS_PRUNE_EVERY:-30}"
 PAINS_SINCE="${AGENTS_PAINS_SINCE:-90}"
 # checkpoint sugerido depois de um stretch longo de trabalho (segundos de CPU)
 CP_TRABALHO="${AGENTS_CHECKPOINT_WORK:-2700}"
@@ -686,6 +691,31 @@ if isinstance(items, list):
         case "$_gr" in
             *"sem evento novo"*) ;;
             *) log "provider-guard: $_gr" ;;
+        esac
+    fi
+
+    # (25/11, medido) PRUNE DO ROSTER: nada no repo chamava
+    # `agent-roster.py prune` em nenhum ciclo, e os claims mortos
+    # ACUMULAVAM: medido, o roster tinha 14 entradas, 11 delas mortas
+    # (agentes de spawn encerrados), e um claim morto bloqueia claim novo
+    # (a colisao de escopo e' detectada contra entradas antigas). O prune
+    # ja e' seguro — decide vida pela SESSAO viva (via /proc e a API do
+    # opencode), nunca pela tabela congelada do DB (a leitura errada que
+    # apagou os 4 agentes vivos em 09/11). Agora roda sozinho, uma vez a
+    # cada PRUNE_EVERY ciclos, e so remove quem esta morto HA MAIS TEMPO
+    # que o cooldown (STALE_AFTER), para nao competir com um spawn que
+    # acabou de acordar.
+    _cpn=$(cat "$DIR_ST/ciclo.prune" 2>/dev/null || echo 0)
+    _cpn=$(( _cpn + 1 ))
+    [ "$CHECK" -eq 1 ] || echo "$_cpn" > "$DIR_ST/ciclo.prune"
+    if [ "$_cpn" -ge "$PRUNE_EVERY" ] && [ -x "$ROSTER_PY" ]; then
+        [ "$CHECK" -eq 1 ] || echo 0 > "$DIR_ST/ciclo.prune"
+        _pr=$(python3 "$ROSTER_PY" prune 2>&1 | tail -1)
+        case "$_pr" in
+            *"entradas mortas removidas")
+                _n=$(echo "$_pr" | grep -oE '[0-9]+' | head -1)
+                [ "${_n:-0}" -gt 0 ] && log "roster: prune removeu $_n entrada(s) morta(s)";;
+            *) log "roster: prune nao rodou: $_pr" ;;
         esac
     fi
 

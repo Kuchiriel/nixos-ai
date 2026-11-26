@@ -180,6 +180,40 @@
   # =========================================================================
   # 1. HARDWARE — Intel i7-13620H + RTX 4050 (dGPU) + Intel UHD (iGPU)
   # =========================================================================
+
+  # (24/11, pedido do dono) A MAQUINA NAO PODE SUSPENDER NEM DORMIR.
+  # O dono acessa o host por remoto (tailnet + MCP coord) e a cada hora a
+  # maquina ficava inativa: fechar a tampa disparava a acao padrao do logind
+  # em notebook (HandleLidSwitch=suspend, medido por busctl) e o hypridle
+  # suspendia em 20 min de idle.
+  # Duas camadas:
+  #   1) logind: tampa e idle nao fazem NADA (ignore = nem suspende, nem
+  #      hiberna, nem trava a sessao);
+  #   2) um inhibitor de sleep em modo BLOCK, de nivel de sistema, para
+  #      que NENHUM caminho (tecla, logind, timer) consiga dormir: e a
+  #      garantia de que o acesso remoto nunca caia.
+  services.logind = {
+    settings.Login = {
+      HandleLidSwitch = "ignore";
+      HandleLidSwitchExternalPower = "ignore";
+      HandleLidSwitchDocked = "ignore";
+      IdleAction = "ignore";
+      IdleActionExternalPower = "ignore";
+    };
+  };
+
+  systemd.services.house-no-sleep = {
+    description = "Bloqueia suspensao/hibernacao: a casa e' acessada remotamente";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "sleep.target" "suspend.target" "hibernate.target" ];
+    serviceConfig = {
+      Type = "simple";
+      Restart = "always";
+      RestartSec = 5;
+      ExecStart = "${config.systemd.package}/bin/systemd-inhibit --what=sleep --mode=block --why=nitro-v15-acessado-remotamente ${pkgs.coreutils}/bin/sleep infinity";
+    };
+  };
+
   hardware.nvidia = {
     package = config.boot.kernelPackages.nvidiaPackages.stable;
     modesetting.enable = true;

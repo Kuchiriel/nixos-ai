@@ -317,6 +317,28 @@ def write_spawn_state(session: str, data: dict) -> None:
         pass
 
 
+def _kill_group(pid: int) -> None:
+    """Mata o grupo de processos do opencode run (start_new_session=True).
+
+    (25/11) Com Popen + start_new_session, o opencode vira leader de um
+    grupo: matar o grupo inteiro evita deixar o filho vivo quando o spawn
+    estoura o timeout ou e' interrompido.
+    """
+    import signal as _signal
+    try:
+        os.killpg(os.getpgid(pid), _signal.SIGTERM)
+    except Exception:
+        try:
+            os.kill(pid, _signal.SIGTERM)
+        except Exception:
+            pass
+    time.sleep(1)
+    try:
+        os.killpg(os.getpgid(pid), _signal.SIGKILL)
+    except Exception:
+        pass
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", required=True)
@@ -438,8 +460,19 @@ def main() -> int:
     # EARLY CHECKPOINT: a sessão existe antes do `opencode run`; publicar o
     # estado agora permite que o runner/fila reivindique o agente sem esperar
     # o turno inteiro (durabilidade síncrona, ver write_spawn_state).
+    #
+    # (25/11, medido) O checkpoint ANTESNAO PROVAVA VIDA NENHUM: o state
+    # ficava em "starting" sem PID e sem finished_at. Medido no host: 4 dos
+    # 29 state files estavam presos em "starting" ha 2,6 dias, com NENHUM
+    # processo vivo (pgrep nao achou nenhum) — o subprocess.run do opencode
+    # foi morto e o arquivo nunca recebeu o fechamento. Quem olhasse o
+    # estado nao distinguia "ainda subindo" de "morreu ha dias".
+    # Agora: o PID do opencode run entra no checkpoint (da para provar vida),
+    # e o proprio spawn, ao terminar, sempre fecha o arquivo.
     out["status"] = "starting"
     out["started_at"] = int(time.time())
+    out["spawn_pid"] = os.getpid()
+    out["heartbeat_at"] = out["started_at"]
     write_spawn_state(sess, out)
 
     # (15/11) MODELO LOCAL = PERFIL ENXUTO. Medido: o payload cheio do
@@ -464,20 +497,43 @@ def main() -> int:
         # substitui: sem isso o payload do repo entra e estoura o ctx do 4B)
         env["OPENCODE_DISABLE_PROJECT_CONFIG"] = "1"
         cwd = str(scratch)
+    # (25/11) O opencode run entra como PROCESSO (Popen), nao como
+    # subprocess.run: assim o PID dele fica no checkpoint e um leitor pode
+    # PROVAR se o spawn ainda esta vivo (matando o grupo de processos se o
+    # spawn for interrompido). Com subprocess.run nao havia PID nenhum: um
+    # spawn morto ficava em "starting" para sempre (medido: 4 casos, 2,6 dias).
+    proc = None
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=900,
-                           cwd=cwd, env=env)
-        out["rc"] = p.returncode
-        out["output"] = ((p.stdout or "") + (p.stderr or ""))[-800:]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, cwd=cwd, env=env, start_new_session=True)
+        out["child_pid"] = proc.pid
         out["cmd"] = cmd
         out["cwd"] = cwd
+        write_spawn_state(sess, out)
+        try:
+            stdout, stderr = proc.communicate(timeout=900)
+            out["rc"] = proc.returncode
+        except subprocess.TimeoutExpired:
+            out["rc"] = 124
+            stdout, stderr = "", "timeout apos 900s"
+            _kill_group(proc.pid)
+            try:
+                stdout, stderr = proc.communicate(timeout=30)
+            except Exception:
+                pass
+        out["output"] = ((stdout or "") + (stderr or ""))[-800:]
         out["env"] = {k: v for k, v in env.items() if k.startswith("OPENCODE")}
-    except subprocess.TimeoutExpired:
-        out["rc"] = 124
-        out["output"] = "timeout apos 900s"
     except Exception as exc:  # noqa: BLE001
         out["rc"] = 1
         out["output"] = str(exc)
+    finally:
+        # (25/11) O checkpoint SEMPRE fecha, mesmo com SIGTERM/SIGINT no meio:
+        # um arquivo em "starting" sem finished_at e' o que fez o observador
+        # confundir spawn lento com spawn morto.
+        out["status"] = "done" if out.get("rc") == 0 else "failed"
+        out["finished_at"] = int(time.time())
+        out["heartbeat_at"] = out["finished_at"]
+        write_spawn_state(sess, out)
 
     # registra no roster. O `agent-roster.py claim` exige estar DENTRO de uma
     # janela de agente (guard de seguranca: ninguem se auto-registra). Um
@@ -539,7 +595,9 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         out["roster"] = f"registro falhou: {exc}"
 
-    # (20/11) fecha o checkpoint com o resultado final (o inicial já existe).
+    # (25/11) fecha o checkpoint com o resultado final (o inicial já existe e
+    # o finally acima ja gravou o fechamento; aqui fica o registro final com
+    # o campo de roster).
     out["status"] = "done" if out.get("rc") == 0 else "failed"
     out["finished_at"] = int(time.time())
     write_spawn_state(sess, out)

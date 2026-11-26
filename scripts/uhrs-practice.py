@@ -257,8 +257,14 @@ class DuplexVoice:
         return last
 
 
-def record_label(item, answer, via, path=None, why_dono=None):
+def record_label(item, answer, via, path=None, why_dono=None, dry_run=False):
     """Grava a label do DONO: a resposta DELE, nao o gabarito.
+
+    (25/11) `dry_run`: nao grava nada e devolve None. Sem isso, QUALQUER
+    teste da pratica gravava no registro real do dono (medido: um teste
+    meu criou uma label de teste no `data/judgments/labels.jsonl`, que
+    nao existia antes — arquivada com read-back e removida). O
+    `uhrs-capture.py` ja tinha `--dry-run`; a pratica nao tinha.
 
     (14/11) Dois bugs pegos ao ler o codigo (nao por teste, que nao cobre
     o arquivo gravado):
@@ -291,6 +297,8 @@ def record_label(item, answer, via, path=None, why_dono=None):
         "via": via,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+    if dry_run:
+        return None
     with target.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(row, ensure_ascii=False) + "\n")
     return target
@@ -350,6 +358,18 @@ def main():
     ap.add_argument("--duplex-log", default="")
     ap.add_argument("--show-rubric", action="store_true")
     ap.add_argument("--items-file", default=str(ITEMS))
+    # (25/11) O REGISTRO PODE SER REDIRECIONADO, e ha DRY-RUN. Medido: antes
+    # desta opcao, QUALQUER teste da pratica gravava no registro REAL do
+    # dono (data/judgments/labels.jsonl) — o proprio `uhrs-capture.py` ja
+    # tinha `--labels` e `--dry-run`, e a pratica nao tinha nenhum dos dois.
+    # Um teste meu criou uma label de teste no registro real do dono (o
+    # arquivo nao existia antes): ela foi arquivada com read-back (hash
+    # conferido) e removida. Agora da para ensaiar sem tocar no dado.
+    ap.add_argument("--labels", default="",
+                    help="grava as labels em OUTRO arquivo (o registro real "
+                         "do dono fica intacto)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="faz a pratica sem gravar nada (so o placar)")
     ap.add_argument("--answer", default="",
                     help="responde um item e sai (para teste automatico)")
     ap.add_argument("--self-test", action="store_true",
@@ -451,14 +471,20 @@ def main():
                 print(f"  porque (seu): {why_dono}")
         record_label(it, got or "unparsed",
                     "voice" if args.from_duplex else "teclado",
-                    why_dono=why_dono or None)
+                    path=args.labels or None,
+                    why_dono=why_dono or None,
+                    dry_run=args.dry_run)
         if args.from_duplex:
             # ele le a explicacao antes do proximo item aparecer
             time.sleep(4)
     total = len(items)
     print("-" * 72)
     print(f"placar: {right}/{total} = {right/max(1,total):.0%}")
-    print(f"labels gravadas em: {LABELS}")
+    destino = args.labels or str(LABELS)
+    if args.dry_run:
+        print(f"DRY-RUN: nada foi gravado (o registro seria {destino})")
+    else:
+        print(f"labels gravadas em: {destino}")
     if right < total:
         print("dica: o erro que mais custa e' chamar de 'relevante' o que so "
               "responde pela metade; releia os criterios de desempate.")
