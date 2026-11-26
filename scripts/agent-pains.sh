@@ -89,7 +89,11 @@ with open(path, 'a', encoding='utf-8') as fh:
 print("pain registrada")
 PY
   fi
-  render
+  # (26/11, medido) `render` nao existe como funcao: o dispatcher chama
+  # `cmd_render`. O `add` escrevia a linha no jsonl e MORRIA NESSA LINHA com
+  # "render: comando nao encontrado" (set -e), entao o PAINS.md nao era
+  # regravado e o add devolvia erro. Agora chama a funcao que existe.
+  cmd_render
 }
 
 cmd_scan() {
