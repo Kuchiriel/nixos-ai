@@ -118,6 +118,7 @@ def main():
     r = {"seed": a.seed, "steps": a.steps, "vocab": vocab, "tokens": len(seq),
          "d": a.d, "scheduled_sampling": not a.no_ss,
          "corpus": a.npy or a.corpus or str(CORPUS),
+         "batch": a.batch, "tokens_seen": a.steps * a.batch * a.seq,
          "lr": a.lr, "warmup": a.warmup,
          "val_loss": round(val_loss,4), "perplexity": round(math.exp(min(val_loss,20)),3),
          "acc": round(corr/max(vn,1),4), "seconds": round(time.perf_counter()-t0,1)}
