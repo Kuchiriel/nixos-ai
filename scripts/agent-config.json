@@ -11,10 +11,10 @@
   },
 
   "servicos": {
-    "opencode_serve": { "porta": 4599, "host": "127.0.0.1", "descricao": "API do OpenCode (entrega de mensagens aos agentes)" },
+    "opencode_serve": { "porta": 4599, "host": "100.121.100.103", "descricao": "API do OpenCode (entrega de mensagens aos agentes). MEDIDO 25/11: o serve escuta SO no IP do tailnet (home-manager/modules/services/opencode-serve.nix: --hostname 100.121.100.103 --port 4599); o 127.0.0.1:4599 da RECUSA a conexao (Connection refused), o que fazia o roster marcar agentes vivos como dead e o agent-msg.sh recusar a entrega" },
     "agent_hub": { "porta": 8091, "host": "127.0.0.1", "descricao": "Mission Control (agentes, spawn, wake, bus, A/B)" },
     "jarvis_webui": { "porta": 8090, "host": "127.0.0.1", "descricao": "WebUI oficial (FastAPI + SvelteKit)" },
-    "coord_mcp": { "porta": 8765, "host": "127.0.0.1", "descricao": "Coordenação via bus (MCP streamable-http)" },
+    "coord_mcp": { "porta": 8765, "host": "100.121.100.103", "descricao": "Coordenação via bus (MCP streamable-http). MEDIDO 25/11: escuta SÓ no IP do tailnet; o 127.0.0.1:8765 recusa a conexão" },
     "llama_router": { "porta": 8080, "host": "127.0.0.1", "descricao": "LLM router (bonsai/prism)" },
     "embeddings": { "porta": 8081, "host": "127.0.0.1", "descricao": "Embeddings (nomic)" },
     "rerank": { "porta": 8082, "host": "127.0.0.1", "descricao": "Reranker (bge)" },
@@ -42,9 +42,9 @@
   },
 
   "ambiente": {
-    "AGENTS_OC_URL": "http://127.0.0.1:4599",
+    "AGENTS_OC_URL": "http://100.121.100.103:4599",
     "AGENT_HUB_URL": "http://127.0.0.1:8091",
-    "COORD_MCP_URL": "http://127.0.0.1:8765/mcp",
+    "COORD_MCP_URL": "http://100.121.100.103:8765/mcp",
     "JARVIS_REPO": "/home/nixos/projects/nixos-ai"
   }
 }
