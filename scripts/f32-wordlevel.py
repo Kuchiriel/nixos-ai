@@ -37,6 +37,7 @@ def main():
     ap.add_argument("--d", type=int, default=320)
     ap.add_argument("--seq", type=int, default=256)
     ap.add_argument("--batch", type=int, default=8)
+    ap.add_argument("--no-ss", action="store_true")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--ckpt", default="")
     ap.add_argument("--out", required=True)
@@ -62,7 +63,7 @@ def main():
         y = torch.tensor([train[k+1:k+1+a.seq] for k in st.tolist()], device=a.device)
         # scheduled sampling: p decai de 1.0 -> 0.0 ao longo do treino
         p = 1.0 - step / a.steps
-        if random.random() < p and step % 4 == 0:
+        if (not a.no_ss) and random.random() < p and step % 4 == 0:
             with torch.no_grad():
                 # gerar 32 tokens greedy a partir do prefixo e substituir
                 pref = x[:, :32]
@@ -70,7 +71,8 @@ def main():
                     lg = model(pref, causal=True)[:, -1, :]
                     nxt = lg.argmax(-1, keepdim=True)
                     pref = torch.cat([pref, nxt], dim=1)
-                x = torch.cat([pref[:, :32], x[:, 32:]], dim=1)
+                # usar os tokens GERADOS (pref[:,32:]), nao o prefixo original
+                x = torch.cat([x[:, :32], pref[:, 32:], x[:, 64:]], dim=1)
         with torch.autocast(device_type=a.device, dtype=torch.bfloat16) if a.device=="cuda" else torch.autocast(enabled=False):
             lg = model(x, causal=True).reshape(-1, vocab).float()
             loss = F.cross_entropy(lg, y.reshape(-1))
@@ -92,7 +94,7 @@ def main():
             vn += y.numel()
     val_loss = vl/max(vn,1)
     r = {"seed": a.seed, "steps": a.steps, "vocab": vocab, "tokens": len(seq),
-         "d": a.d, "scheduled_sampling": True,
+         "d": a.d, "scheduled_sampling": not a.no_ss,
          "val_loss": round(val_loss,4), "perplexity": round(math.exp(min(val_loss,20)),3),
          "acc": round(corr/max(vn,1),4), "seconds": round(time.perf_counter()-t0,1)}
     if a.ckpt:
