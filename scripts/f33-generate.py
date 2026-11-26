@@ -6,7 +6,7 @@ import json, sys
 import torch, runpy
 from transformers import GPT2TokenizerFast
 
-CKPT = Path("/home/nixos/work/hybrid/checkpoints/f42-50m-full-s43.pt")
+CKPT = Path("/home/nixos/work/hybrid/checkpoints/f43-150m-full-s42.pt")
 prompt = sys.argv[1] if len(sys.argv) > 1 else "Once upon a time"
 n = int(sys.argv[2]) if len(sys.argv) > 2 else 60
 dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -44,4 +44,4 @@ with torch.no_grad():
         out.append(nxt)
         h = torch.cat([h, torch.tensor([[nxt]], device=dev)], dim=1)
 print(json.dumps({"prompt": prompt, "generated": tok.decode([rev.get(i, 0) for i in out]),
-                  "tokens": n, "model": "f42-50m-full-s43"}))
+                  "tokens": n, "model": "f43-150m-full-s42"}))
