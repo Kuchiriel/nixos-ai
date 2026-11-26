@@ -32,6 +32,7 @@ def build_tokens(topk=10000, limit=20_000_000):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--corpus", default="")
     ap.add_argument("--steps", type=int, default=2400)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--d", type=int, default=320)
@@ -48,8 +49,14 @@ def main():
     ScaleLM = runpy.run_path(str(SRC))["ScaleLM"]
     random.seed(a.seed); torch.manual_seed(a.seed)
     if torch.cuda.is_available(): torch.cuda.manual_seed_all(a.seed)
-    seq, vocab = build_tokens()
-    n = int(len(seq) * 0.95)
+    if a.corpus:
+        cd = torch.load(a.corpus, map_location="cpu", weights_only=False)
+        seq = cd["seq"].tolist(); vocab = cd["vocab"]
+        n = cd["n_train"]
+        print(json.dumps({"corpus": a.corpus, "source_bytes": cd["source_bytes"]}), flush=True)
+    else:
+        seq, vocab = build_tokens()
+        n = int(len(seq) * 0.95)
     train, val = seq[:n], seq[n:]
     print(json.dumps({"tokens": len(seq), "vocab": vocab,
                       "train": len(train), "val": len(val)}), flush=True)
@@ -102,6 +109,7 @@ def main():
     val_loss = vl/max(vn,1)
     r = {"seed": a.seed, "steps": a.steps, "vocab": vocab, "tokens": len(seq),
          "d": a.d, "scheduled_sampling": not a.no_ss,
+         "corpus": a.corpus or str(CORPUS),
          "lr": a.lr, "warmup": a.warmup,
          "val_loss": round(val_loss,4), "perplexity": round(math.exp(min(val_loss,20)),3),
          "acc": round(corr/max(vn,1),4), "seconds": round(time.perf_counter()-t0,1)}
