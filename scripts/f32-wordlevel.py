@@ -34,6 +34,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--corpus", default="")
     ap.add_argument("--npy", default="")
+    ap.add_argument("--val-every", type=int, default=0,
+                    help="avaliar e salvar melhor checkpoint a cada N passos")
     ap.add_argument("--qat", action="store_true",
                     help="QAT ternario {-1,0,1} com STE em head+embedding")
     ap.add_argument("--steps", type=int, default=2400)
@@ -117,6 +119,30 @@ def main():
         elif a.warmup and step == a.warmup + 1:
             for g in opt.param_groups: g["lr"] = a.lr
         opt.zero_grad(); loss.backward(); opt.step()
+        if a.val_every and step % a.val_every == 0:
+            model.eval(); vl=0.0; vc=0; vn=0
+            with torch.no_grad():
+                for k in range(0, min(200000, len(val)-a.seq-1), a.seq*a.batch):
+                    xs=[val[k+j:k+j+a.seq] for j in range(0, a.seq*a.batch, a.seq)]
+                    xs=[z for z in xs if len(z)==a.seq]
+                    if len(xs)<2: break
+                    xx=torch.tensor(np.asarray(xs),dtype=torch.long,device=a.device)
+                    yy=torch.tensor(np.asarray([val[k+j+1:k+j+1+a.seq] for j in range(0,a.seq*len(xs),a.seq)]),
+                                    dtype=torch.long,device=a.device)
+                    lg=model(xx,causal=True)
+                    vl+=float(F.cross_entropy(lg.reshape(-1,vocab).float(),yy.reshape(-1),reduction="sum"))
+                    vc+=int((lg.argmax(-1)==yy).sum()); vn+=yy.numel()
+            vloss=vl/max(vn,1)
+            rec={"step":step,"val_loss":round(vloss,4),
+                 "perplexity":round(math.exp(min(vloss,20)),3),
+                 "acc":round(vc/max(vn,1),4)}
+            if "curve" not in locals(): curve=[]
+            curve.append(rec)
+            if "best" not in locals() or vloss < best["val_loss"]:
+                best={"val_loss":vloss,"step":step,
+                      "state":{k:v.detach().cpu().clone() for k,v in model.state_dict().items()}}
+            print("VALID "+json.dumps(rec),flush=True)
+            model.train()
         if step % 400 == 0:
             print(json.dumps({"step": step, "loss": round(float(loss),4),
                               "p": round(p,3)}), flush=True)
@@ -146,6 +172,14 @@ def main():
                     "seq": a.seq, "seed": a.seed, "tokenizer": str(TOKDIR)},
                    a.ckpt)
         r["checkpoint"] = a.ckpt
+    if a.val_every and "best" in locals():
+        r["curve"]=curve
+        r["best"]={"val_loss":best["val_loss"],"step":best["step"]}
+        if a.ckpt:
+            bpath=a.ckpt.replace(".pt","-best.pt")
+            torch.save({"state":best["state"],"vocab":vocab,"d":a.d,
+                        "seq":a.seq,"step":best["step"]},bpath)
+            r["best_checkpoint"]=bpath
     Path(a.out).write_text(json.dumps(r,indent=2)+"\n")
     print("RESULT "+json.dumps(r), flush=True)
 
