@@ -34,6 +34,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--corpus", default="")
     ap.add_argument("--npy", default="")
+    ap.add_argument("--qat", action="store_true",
+                    help="QAT ternario {-1,0,1} com STE em head+embedding")
     ap.add_argument("--steps", type=int, default=2400)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--d", type=int, default=320)
@@ -69,6 +71,22 @@ def main():
     print(json.dumps({"tokens": len(seq), "vocab": vocab,
                       "train": len(train), "val": len(val)}), flush=True)
     model = ScaleLM(vocab, a.d, "ngpt_only").to(a.device)
+    # F45: QAT ternario via straight-through estimator no head/embedding.
+    # Os pesos latentes permanecem FP32 (gradiente flui), a frente usa {-1,0,1}.
+    if a.qat:
+        def tern(x):
+            scale = x.abs().mean().clamp_min(1e-8)
+            q = torch.clamp(torch.round(x / scale), -1, 1)
+            return (q + (x / scale - q).detach()) * scale
+        _head_fwd = model.head.forward
+        _tok_fwd = model.tok.forward
+        def head_fwd(h):
+            return F.linear(h, tern(model.head.weight), model.head.bias)
+        def tok_fwd(x):
+            return F.embedding(x, tern(model.tok.weight))
+        model.head.forward = head_fwd
+        model.tok.forward = tok_fwd
+        print(json.dumps({"qat": "ternary_STE", "targets": ["head","tok"]}), flush=True)
     # pos do ScaleLM atual e' 512; seq 256 cabe
     opt = torch.optim.Adagrad(model.parameters(), lr=0.01) if False else \
           torch.optim.AdamW(model.parameters(), lr=a.lr, fused=(a.device=="cuda"))
@@ -119,7 +137,8 @@ def main():
          "d": a.d, "scheduled_sampling": not a.no_ss,
          "corpus": a.npy or a.corpus or str(CORPUS),
          "batch": a.batch, "tokens_seen": a.steps * a.batch * a.seq,
-         "lr": a.lr, "warmup": a.warmup,
+         "lr": a.lr, "warmup": a.warmup, "qat": a.qat,
+         "peak_vram_bytes": int(torch.cuda.max_memory_allocated()) if a.device=="cuda" else 0,
          "val_loss": round(val_loss,4), "perplexity": round(math.exp(min(val_loss,20)),3),
          "acc": round(corr/max(vn,1),4), "seconds": round(time.perf_counter()-t0,1)}
     if a.ckpt:
