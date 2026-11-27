@@ -162,3 +162,73 @@ def test_named_target_is_not_dropped_when_there_is_no_file_overlap():
     corpo = bloco.group(1)
     assert "targets.append(alvo(a))" in corpo, (
         "o alvo nomeado e descartado quando nao ha sobreposicao de arquivos")
+
+
+# ── o mesmo defeito nos scripts de shell (fallback embutido) ───────────
+
+SHELL_SCRIPTS = ("agent-msg.sh", "agents-watcher.sh", "agent-bus-pending.py")
+
+
+@pytest.mark.parametrize("script", SHELL_SCRIPTS)
+def test_no_script_falls_back_to_the_dead_loopback_url(script):
+    """Nenhum script pode voltar a usar o loopback que recusa a conexão.
+
+    O serve e o coord-mcp escutam SO no IP do tailnet: o fallback de
+    loopback e o que fez a liveness parecer morta e o prune apagar agentes
+    vivos. Medido 25/11.
+
+    So o CODIGO EXECUTAVEL conta: um comentario ou uma docstring pode
+    citar o loopback para explicar o defeito (o historico importa).
+    """
+    path = REPO / "scripts" / script
+    src = path.read_text(encoding="utf-8")
+
+    def _sem_docstrings(codigo: str) -> str:
+        """Remove as linhas cobertas por docstrings (modulo/funcao/classe)."""
+        import ast
+        arvore = ast.parse(codigo)
+        pular: set[int] = set()
+        for node in ast.walk(arvore):
+            corpo = getattr(node, "body", None)
+            if not isinstance(corpo, list) or not corpo:
+                continue
+            primeiro = corpo[0]
+            if not isinstance(primeiro, ast.Expr):
+                continue
+            valor = getattr(primeiro, "value", None)
+            if not isinstance(valor, ast.Constant) or not isinstance(valor.value, str):
+                continue
+            for ln in range(valor.lineno, (valor.end_lineno or valor.lineno) + 1):
+                pular.add(ln)
+        return "\n".join(ln for i, ln in enumerate(codigo.splitlines(), 1)
+                         if i not in pular)
+
+    if script.endswith(".py"):
+        executavel = _sem_docstrings(src)
+    else:
+        # shell: tira os comentarios e, nos heredocs de python, as docstrings
+        linhas: list[str] = []
+        bloco: list[str] = []
+        dentro = False
+        for ln in src.splitlines():
+            if ln.strip().startswith("<<"):
+                dentro = True
+                bloco = []
+                continue
+            if dentro:
+                if ln.strip() in ("PY", "PYEOF"):
+                    dentro = False
+                    try:
+                        linhas.extend(_sem_docstrings("\n".join(bloco)).splitlines())
+                    except SyntaxError:
+                        linhas.extend(bloco)
+                    continue
+                bloco.append(ln)
+                continue
+            if ln.lstrip().startswith("#"):
+                continue
+            linhas.append(ln)
+        executavel = "\n".join(linhas)
+
+    assert "127.0.0.1:4599" not in executavel, f"{script} ainda usa o loopback da API"
+    assert "127.0.0.1:8765" not in executavel, f"{script} ainda usa o loopback do coord"
