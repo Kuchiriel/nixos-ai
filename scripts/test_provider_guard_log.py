@@ -121,6 +121,137 @@ def test_classification_uses_the_real_log_text(erro: str, classe: str) -> None:
     assert mod.classify(erro)[0] == classe
 
 
+# (26/11, medido no log vivo, lane endpoint-ovhcloud) O texto real de EOL e
+# de 429 do opencode 2.2.6 NAO casa com os padroes de 24/11: o 2.2.6 escreve
+# "has reached its end of life ... and is no longer available" (e nao "is
+# currently unavailable"), e o 429 vem como "Provider request failed with HTTP
+# 429" com o corpo da cota. Medido em 7 dias: 63 eventos, 43 caidos em OTHER
+# (28 EOL, 11 HTTP 429, 4 overloaded) — e OTHER nao esta em ROTATE_CLASSES,
+# entao essas 43 nao viravam rotacao: a sessao ficava no modelo morto.
+@pytest.mark.parametrize(
+    "erro,classe",
+    [
+        ("AI.Error: The model 'google/gemma-4-31b-it' has reached its end of "
+         "life on 2026-11-24T09:00:00Z and is no longer available.", "MODEL"),
+        ("AI.Error: The model 'google/diffusiongemma-26b-a4b-it' has reached "
+         "its end of life on 2026-11-12T09:00:00Z and is no longer available.",
+         "MODEL"),
+        ("AI.Error: Provider request failed with HTTP 429: [{'error': {'code': "
+         "429, 'message': 'You exceeded your current quota'}}]", "RATE"),
+        ("AI.Error: Service temporarily overloaded", "RATE"),
+    ],
+)
+def test_classification_covers_the_measured_2x_texts(erro: str, classe: str) -> None:
+    """(26/11) O texto que o 2.2.6 escreve HOJE precisa cair numa classe
+    rotacionavel: EOL e 429 caiam em OTHER e ficavam sem rotacao."""
+    mod = _guard()
+    assert mod.classify(erro)[0] == classe
+
+
+def test_every_classified_failure_is_rotatable_or_explicitly_not() -> None:
+    """(26/11) Nenhum texto de provider real pode cair em OTHER sem querer:
+    OTHER nao esta em ROTATE_CLASSES, entao o evento morre no log."""
+    mod = _guard()
+    for erro in (
+        "AI.Error: The model 'google/gemma-4-31b-it' has reached its end of "
+        "life on 2026-11-24T09:00:00Z and is no longer available.",
+        "AI.Error: Provider request failed with HTTP 429: quota exceeded",
+        "AI.Error: Service temporarily overloaded",
+        "AI.Error: API rate limit exceeded",
+        "AI.Error: Too Many Requests",
+        "AI.Error: Model 'x' is currently unavailable.",
+    ):
+        classe = mod.classify(erro)[0]
+        assert classe != "OTHER", erro
+        assert classe in mod.ROTATE_CLASSES, (erro, classe)
+
+
+def test_provider_and_model_are_recovered_from_the_error_text() -> None:
+    """(26/11) Nas linhas do 2.2.6 providerID= e modelID= nao existem (medido:
+    0 de 63 linhas ERROR tem qualquer um dos dois), entao o provider e o model
+    vinham vazios e a nota saia como 'PROVIDER OTHER em /'. O texto do erro
+    traz o nome do modelo morto, que e' o que a nota precisa dizer."""
+    mod = _guard()
+    erro = ("AI.Error: The model 'google/gemma-4-31b-it' has reached its end "
+            "of life on 2026-11-24T09:00:00Z and is no longer available.")
+    model = mod.model_from_error(erro)
+    assert model == "google/gemma-4-31b-it"
+
+
+def test_provider_is_recovered_from_the_model_name() -> None:
+    """(26/11) O prefixo do catalogo e' o provider ('nvidia/google/...' no
+    /api/models), e o texto do erro traz o id do modelo sem prefixo. Sem isso
+    a chave de cooldown fica por (classe, provider vazio, sessao)."""
+    mod = _guard()
+    catalogo = {
+        "nvidia": {"google/gemma-4-31b-it": "nvidia/google/gemma-4-31b-it",
+                   "google/diffusiongemma-26b-a4b-it":
+                       "nvidia/google/diffusiongemma-26b-a4b-it"},
+        "openrouter": {"google/gemma-4-31b-it:free":
+                       "openrouter/google/gemma-4-31b-it:free"},
+    }
+    assert mod.provider_for_model("google/gemma-4-31b-it", catalogo) == "nvidia"
+    assert mod.provider_for_model(
+        "google/diffusiongemma-26b-a4b-it", catalogo) == "nvidia"
+    # id completo (o log 1.x traz providerID= e modelID=) tambem resolve
+    assert mod.provider_for_model(
+        "nvidia/google/gemma-4-31b-it", catalogo) == "nvidia"
+    # nada inventado: modelo fora do catalogo fica sem provider
+    assert mod.provider_for_model("google/model-que-nao-existe", catalogo) == ""
+
+
+def test_event_without_model_in_text_uses_the_session_model(tmp_path: Path) -> None:
+    """(26/11) 30 dos 58 eventos de 7 dias nao nomeiam o modelo no texto
+    (429 com corpo de cota, overloaded, CTX). Para esses, provider e model
+    vem do modelo ATUAL da sessao — e a mesma fonte que o agent-model.py usa
+    para escolher o proximo modelo."""
+    mod = _guard()
+    linha = (
+        f'timestamp={_ago(5)} level=ERROR run=7101e745 '
+        'message="Failed to drain Session" '
+        'cause="AI.Error: Provider request failed with HTTP 429: '
+        '[{\\"error\\": {\\"code\\": 429}}]" '
+        'sessionID=ses_spawn1795170445151'
+    )
+    p = _write(tmp_path, linha)
+    chamadas: list[str] = []
+
+    def lookup(session: str) -> tuple[str, str]:
+        chamadas.append(session)
+        return ("nvidia", "minimaxai/minimax-m3.1-flash")
+
+    events = mod.parse_events(p, 10_000, session_lookup=lookup)
+    assert len(events) == 1
+    e = events[0]
+    assert e["class"] == "RATE"
+    assert e["provider"] == "nvidia"
+    assert e["model"] == "minimaxai/minimax-m3.1-flash"
+    assert chamadas == ["ses_spawn1795170445151"]
+
+
+def test_event_with_model_in_text_does_not_call_the_session(tmp_path: Path) -> None:
+    """O texto do erro ja diz o modelo: nao ha por que chamar a API."""
+    mod = _guard()
+    linha = (
+        f'timestamp={_ago(5)} level=ERROR run=7101e745 '
+        'message="Failed to drain Session" '
+        'cause="AI.Error: The model \'google/gemma-4-31b-it\' has reached its '
+        'end of life on 2026-11-24T09:00:00Z and is no longer available." '
+        'sessionID=ses_spawn1795170445151'
+    )
+    p = _write(tmp_path, linha)
+
+    def lookup(session: str) -> tuple[str, str]:  # pragma: no cover
+        raise AssertionError("nao deveria consultar a sessao")
+
+    events = mod.parse_events(p, 10_000, session_lookup=lookup)
+    assert len(events) == 1
+    e = events[0]
+    assert e["class"] == "MODEL"
+    assert e["model"] == "google/gemma-4-31b-it"
+    assert e["provider"] == "nvidia"
+
+
 def test_ignores_lines_that_are_not_provider_errors(tmp_path: Path) -> None:
     mod = _guard()
     ruido = (
