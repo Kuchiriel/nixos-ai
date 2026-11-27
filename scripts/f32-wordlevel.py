@@ -48,6 +48,8 @@ def main():
     ap.add_argument("--no-ss", action="store_true")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--ckpt", default="")
+    ap.add_argument("--resume", default="",
+                    help="continuar de um checkpoint (carrega state/vocab/d/seq)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     import runpy
@@ -73,6 +75,15 @@ def main():
     print(json.dumps({"tokens": len(seq), "vocab": vocab,
                       "train": len(train), "val": len(val)}), flush=True)
     model = ScaleLM(vocab, a.d, "ngpt_only").to(a.device)
+    if a.resume:
+        ck = torch.load(a.resume, map_location="cpu", weights_only=False)
+        for k, got, want in (("vocab", ck.get("vocab"), vocab),
+                             ("d", ck.get("d"), a.d),
+                             ("seq", ck.get("seq"), a.seq)):
+            if got is not None and int(got) != int(want):
+                raise SystemExit(f"resume: {k} divergente (ckpt={got}, run={want})")
+        model.load_state_dict(ck["state"], strict=True)
+        print(json.dumps({"resume": a.resume, "state_keys": len(ck["state"])}), flush=True)
     # F45: QAT ternario via straight-through estimator no head/embedding.
     # Os pesos latentes permanecem FP32 (gradiente flui), a frente usa {-1,0,1}.
     if a.qat:
@@ -110,7 +121,7 @@ def main():
                     pref = torch.cat([pref, nxt], dim=1)
                 # usar os tokens GERADOS (pref[:,32:]), nao o prefixo original
                 x = torch.cat([x[:, :32], pref[:, 32:], x[:, 64:]], dim=1)
-        with torch.autocast(device_type=a.device, dtype=torch.bfloat16) if a.device=="cuda" else torch.autocast(enabled=False):
+        with torch.autocast(device_type=a.device, dtype=torch.bfloat16) if a.device=="cuda" else torch.autocast(device_type="cpu", enabled=False):
             lg = model(x, causal=True).reshape(-1, vocab).float()
             loss = F.cross_entropy(lg, y.reshape(-1))
         if step <= a.warmup:
