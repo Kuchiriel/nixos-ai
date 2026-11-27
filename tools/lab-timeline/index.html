@@ -61,7 +61,7 @@ plot('val'); table();
  <h2 style="margin-top:0">Arquitetura — timelapse 2D (dados medidos dos checkpoints)</h2>
  <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
   <button id="archPlay" style="background:#238636;color:#fff;border:0;border-radius:6px;padding:6px 12px">▶ evoluir</button>
-  <input id="archRange" type="range" min="0" max="6" value="0" step="1" style="flex:1">
+  <input id="archRange" type="range" min="0" max="12" value="0" step="1" style="flex:1">
   <strong id="archStep">1/7</strong>
  </div>
  <div id="archSvg"></div>
@@ -69,15 +69,7 @@ plot('val'); table();
  <p style="color:#8b949e;font-size:12px;margin-bottom:0">Blocos: 2 de entrada + 4 recorrentes (loop elástico) + 2 de saída — medidos em <code>state_dict</code> (102 tensores). Largura ∝ d_model. Valores de val_loss vêm dos JSONs das frentes; nenhum número é estimado.</p>
 </section>
 <script>
-const ARCH=[
- {label:'F32 · 10M',d:320,vocab:10000,params:16.4,val:2.978,acc:0.472,steps:2400,corpus:'TinyStories-valid 19MB',note:'word-level + scheduled sampling'},
- {label:'F50 · 150M',d:1216,vocab:10000,params:167.0,val:1.5109,acc:0.6089,steps:60000,corpus:'TinyStories-full 469M',note:'60k passos, perto do gate 1.5'},
- {label:'F52 · 150M',d:1216,vocab:10000,params:167.0,val:1.4859,acc:0.6128,steps:68000,corpus:'TinyStories-full 469M',note:'gate 1.5 cruzado em 64k'},
- {label:'F53 · 150M',d:1216,vocab:10000,params:167.0,val:1.7334,acc:0.5576,steps:9600,corpus:'SimpleStories 47M',note:'curadoria vence volume (2 seeds)'},
- {label:'F66 · 150M',d:1216,vocab:10000,params:167.0,val:2.1716,acc:0.4988,steps:9600,corpus:'TinyStories 200-700 chars',note:'encurtar historias piorou'},
- {label:'F71 · 150M',d:1216,vocab:10000,params:167.0,val:2.7304,acc:0.4267,steps:9600,corpus:'TinyStories dedup8',note:'dedup ingenua piorou'},
- {label:'F75 · 150M',d:1216,vocab:10000,params:167.0,val:1.6749,acc:0.5722,steps:9600,corpus:'SimpleStories 210M',note:'escala curada apoiada'}
-];
+const ARCH=[{"label": "F53 · SimpleStories", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.7334, "acc": 0.5576, "steps": 9600, "corpus": "SimpleStories 47M", "note": "curadoria vence volume (2 seeds)"}, {"label": "F66 · curto", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.1716, "acc": 0.4988, "steps": 9600, "corpus": "TinyStories 200-700", "note": "encurtar historias piorou"}, {"label": "F71 · dedup8", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.7304, "acc": 0.4267, "steps": 9600, "corpus": "TinyStories dedup8", "note": "dedup ingenua piorou"}, {"label": "F10 · 10M", "d": 320, "vocab": 10000, "params": 16.4, "val": 2.9782, "acc": 0.3977, "steps": 2400, "corpus": "TinyStories-valid", "note": "word-level, scheduled sampling"}, {"label": "F35 · 50M", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.3091, "acc": 0.4872, "steps": 9600, "corpus": "TinyStories-valid", "note": ""}, {"label": "F38 · 50M early", "d": 704, "vocab": 10000, "params": 62.1, "val": null, "acc": null, "steps": 20000, "corpus": "TinyStories-valid", "note": "early stopping com checkpoints a cada 4k"}, {"label": "F41 · 50M big", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.2267, "acc": 0.4976, "steps": 9600, "corpus": "TinyStories-valid", "note": "50M com d maior"}, {"label": "F42 · 50M full", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.1358, "acc": 0.507, "steps": 9600, "corpus": "TinyStories-full", "note": "baseline 50M no corpus cheio"}, {"label": "F37 · 150M lr", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.3199, "acc": 0.4856, "steps": 9600, "corpus": "TinyStories-valid", "note": "taxa de aprendizado isolada"}, {"label": "F43 · 150M full", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.9762, "acc": 0.5314, "steps": 9600, "corpus": "TinyStories-full", "note": "baseline 150M, 9600 passos"}, {"label": "F44 · 300M full", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.2159, "acc": 0.4951, "steps": 9600, "corpus": "TinyStories-full", "note": "escala maior, mesmo orcamento"}, {"label": "F45 · 300M QAT", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.1405, "acc": 0.5254, "steps": 19200, "corpus": "TinyStories-full", "note": "QAT ternario"}, {"label": "F47 · 150M early", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.7037, "acc": 0.5745, "steps": 24000, "corpus": "TinyStories-full", "note": "early stopping com checkpoints"}, {"label": "F75 · curado 210M", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.6749, "acc": 0.5722, "steps": 9600, "corpus": "SimpleStories 210M", "note": "escala curada apoiada (2 seeds)"}, {"label": "F36 · 50M/30k", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.8175, "acc": 0.4713, "steps": 30000, "corpus": "TinyStories-valid", "note": "overfit em 30k (F36)"}, {"label": "F39 · 150M lr1e-4", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.2846, "acc": 0.4889, "steps": 9600, "corpus": "TinyStories-valid", "note": "lr 1e-4 em 150M"}, {"label": "F46 · 300M QAT/40k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.8831, "acc": 0.5611, "steps": 40000, "corpus": "TinyStories-full", "note": "QAT 40k passos"}, {"label": "F49 · 150M/40k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.5913, "acc": 0.5944, "steps": 40000, "corpus": "TinyStories-full", "note": "curva 40k, val 1.5913"}, {"label": "F50 · 150M/60k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.5109, "acc": 0.6089, "steps": 60000, "corpus": "TinyStories-full", "note": "val 1.5109, perto do gate"}, {"label": "F52 · 150M/68k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.4859, "acc": 0.6128, "steps": 68000, "corpus": "TinyStories-full", "note": "gate 1.5 cruzado em 64k"}];
 let archTimer=null;
 function drawArch(i){
  const a=ARCH[i];
@@ -113,5 +105,74 @@ document.getElementById('archPlay').addEventListener('click',()=>{
   r.value=v; drawArch(v);
  },1400);
 });
+document.getElementById('archRange').max=ARCH.length-1;
 drawArch(0);
+</script>
+<section style="margin:22px 0;padding:16px;border:1px solid #30363d;border-radius:8px;background:#0d1117">
+ <h2 style="margin-top:0">Comparar arquiteturas A/B</h2>
+ <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+  <select id="cmpA"></select><select id="cmpB"></select>
+  <span id="cmpOut" style="color:#e6edf3"></span>
+ </div>
+</section>
+<section style="margin:22px 0;padding:16px;border:1px solid #30363d;border-radius:8px;background:#0d1117">
+ <h2 style="margin-top:0">Galeria de resultados medidos (<span id="galCount"></span>)</h2>
+ <input id="galFilter" placeholder="filtrar frente / variante / arquivo" style="width:100%;padding:8px;background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:6px">
+ <div id="galeria" style="max-height:420px;overflow:auto;margin-top:10px"></div>
+</section>
+<section style="margin:22px 0;padding:16px;border:1px solid #30363d;border-radius:8px;background:#0d1117">
+ <h2 style="margin-top:0">Roteiro — multimodal, contexto longo e compressão (hipóteses, não medido)</h2>
+ <ul style="color:#c9d1d9;line-height:1.55">
+  <li><b>Arquitetura atual medida</b>: 8 blocos (2 entrada + 4 recorrentes com pesos compartilhados + 2 saída), 8 heads, d 320→1216, 10k vocab, seq 256. <i>Loop elástico</i> é o princípio Dory que estudamos — não substituímos modelos de terceiros.</li>
+  <li><b>Contexto longo em hardware modesto</b>: GQA / MLA / KV compartilhado entre camadas reduzem o cache por token; medir KV bytes/token antes de qualquer promessa. Referência: <a href="https://sebastianraschka.com/llm-architecture-gallery/">LLM Architecture Gallery</a> (cards com contexto, layer mix e tamanho de KV).</li>
+  <li><b>Compressão sem perda</b>: o paper que o dono vai passar (Wikipedia inteira em 10 MB) entra como hipótese pré-registrada: taxa de compressão, tempo de decode e perplexidade reconstruída são os tradeoffs. Nada de adotar antes de medir. A arquitetura deixa de ser só transformer: vira canal + código + modelo, e o ganho real é medido em bits/token e tempo de decode.</li>
+  <li><b>Multimodal</b>: encoder de imagem → projeção → tronco linguístico;prints/OCR locais ja existem no celular (<code>doc-foto</code>). Próximo passo é desenhar o gate de alinhamento, não treinar encoder.</li>
+  <li><b>Como queremos usar isto</b>: visualizar, comparar e decidir junto; cada mudança de arquitetura precisa de curva de escala (≥3 tamanhos) e medição no hardware-alvo antes de virar conclusão.</li>
+ </ul>
+ <p style="color:#8b949e;font-size:12px;margin-bottom:0">Inspiração de visualização: <a href="https://poloclub.github.io/transformer-explainer/">Transformer Explainer</a> (arXiv 2408.04619), <a href="https://bbycroft.net/llm">LLM Visualization</a>, <a href="https://github.com/gokayfem/awesome-vlm-architectures">awesome-vlm-architectures</a>. Nossa visualização é 2D e usa somente números medidos.</p>
+</section>
+<script>
+const selA=document.getElementById('cmpA'), selB=document.getElementById('cmpB');
+ARCH.forEach((a,i)=>{
+ for(const sel of [selA,selB]){const o=document.createElement('option');o.value=i;o.textContent=a.label;sel.appendChild(o);}
+});
+selB.selectedIndex=ARCH.length-1;
+function compare(){
+ const a=ARCH[+selA.value], b=ARCH[+selB.value];
+ const dval=(a.val-b.val);
+ document.getElementById('cmpOut').innerHTML=
+  `<b>${a.label}</b> vs <b>${b.label}</b> · Δval=${dval.toFixed(4)} (${dval<0?'melhor':'pior'} que B) · d ${a.d}→${b.d} · params ${a.params}→${b.params}M · passos ${a.steps}→${b.steps}`;
+}
+selA.addEventListener('change',compare); selB.addEventListener('change',compare); compare();
+document.getElementById('galCount').textContent=D.length;
+function gallery(){
+ const q=document.getElementById('galFilter').value.toLowerCase();
+ const rows=D.filter(p=>[p.front,p.variant,p.file,p.mode].join(' ').toLowerCase().includes(q)).slice(0,200);
+ document.getElementById('galeria').innerHTML='<table><tr><th>frente</th><th>escala</th><th>variante</th><th>val</th><th>acc</th><th>tok/s</th><th>arquivo</th></tr>'+
+  rows.map(r=>`<tr><td>${r.front}</td><td>${r.scale}</td><td>${r.variant||r.mode||'-'}</td><td>${r.val??'-'}</td><td>${r.acc??'-'}</td><td>${r.tok_s??'-'}</td><td>${r.file}</td></tr>`).join('')+'</table>';
+}
+document.getElementById('galFilter').addEventListener('input',gallery);
+gallery();
+</script>
+<section style="margin:22px 0;padding:16px;border:1px solid #30363d;border-radius:8px;background:#0d1117">
+ <h2 style="margin-top:0">Histórico de frentes — todas as medições do dashboard (F1→F79)</h2>
+ <p style="color:#8b949e;font-size:12px">Frentes anteriores a F32 não têm checkpoint preservado neste diretório; por isso o diagrama 2D começa em F10, mas os valores abaixo vêm dos JSONs medidos. Clique em uma frente para ver as variantes na galeria.</p>
+ <div id="historico"></div>
+</section>
+<script>
+function historyTable(){
+ const map=new Map();
+ D.forEach(p=>{
+  const n=parseInt((String(p.front).match(/\d+/)||[0])[0],10);
+  const key=String(p.front)+'|'+n;
+  if(p.val==null||isNaN(p.val))return;
+  const cur=map.get(key);
+  if(!cur||p.val<cur.val)map.set(key,{front:p.front,n:n,val:p.val,scale:p.scale,file:p.file,variants:new Set()});
+  map.get(key).variants.add(p.variant||p.mode||'-');
+ });
+ const rows=[...map.values()].sort((a,b)=>a.n-b.n);
+ document.getElementById('historico').innerHTML='<table><tr><th>frente</th><th>melhor val</th><th>escala</th><th>variantes</th><th>arquivo</th></tr>'+
+  rows.map(r=>`<tr><td>${r.front}</td><td>${r.val}</td><td>${r.scale}</td><td>${r.variants.size}</td><td>${r.file}</td></tr>`).join('')+'</table>';
+}
+historyTable();
 </script></body></html>
