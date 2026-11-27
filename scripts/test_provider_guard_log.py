@@ -9,6 +9,7 @@ REAL do log.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -250,6 +251,38 @@ def test_event_with_model_in_text_does_not_call_the_session(tmp_path: Path) -> N
     assert e["class"] == "MODEL"
     assert e["model"] == "google/gemma-4-31b-it"
     assert e["provider"] == "nvidia"
+
+
+def test_eol_model_is_marked_in_the_cooldown_the_rotation_reads(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """(27/11, medido) O EOL repetia 6 vezes em 24h na mesma sessao: o guard
+    so tinha a chave de dedupe local (classe|provider|sessao, 900 s) e nunca
+    marcava o modelo morto no cooldown que o agent-model.py consulta
+    (provider-cooldown.json, por id do catalogo)."""
+    mod = _guard()
+    cooldown = tmp_path / "provider-cooldown.json"
+    monkeypatch.setattr(mod, "MODEL_COOLDOWN", cooldown)
+    monkeypatch.setattr(mod, "_opencode_providers", lambda: {
+        "nvidia": {"google/gemma-4-31b-it": "nvidia/google/gemma-4-31b-it"}})
+    mod.mark_model_cooldown("nvidia", "google/gemma-4-31b-it")
+    data = json.loads(cooldown.read_text(encoding="utf-8"))
+    assert "nvidia/google/gemma-4-31b-it" in data
+    assert data["nvidia/google/gemma-4-31b-it"] > 0
+
+
+def test_model_cooldown_needs_a_known_catalog_pair(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Nada e' inventado: so marca quando o config do opencode conhece o
+    par provider/modelo (o id do catalogo e' provider + "/" + modelo)."""
+    mod = _guard()
+    cooldown = tmp_path / "provider-cooldown.json"
+    monkeypatch.setattr(mod, "MODEL_COOLDOWN", cooldown)
+    monkeypatch.setattr(mod, "_opencode_providers", lambda: {
+        "nvidia": {"google/gemma-4-31b-it": "nvidia/google/gemma-4-31b-it"}})
+    mod.mark_model_cooldown("", "google/gemma-4-31b-it")
+    mod.mark_model_cooldown("nvidia", "")
+    mod.mark_model_cooldown("openrouter", "google/gemma-4-31b-it")
+    assert not cooldown.exists()
 
 
 def test_ignores_lines_that_are_not_provider_errors(tmp_path: Path) -> None:

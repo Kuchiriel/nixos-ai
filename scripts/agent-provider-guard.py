@@ -38,6 +38,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -263,6 +264,39 @@ def session_provider_model(session: str) -> tuple[str, str]:
     return pair
 
 
+# (27/11, medido) O cooldown que o agent-model.py e o team.py consultam
+# (provider-cooldown.json) e' por ID DE MODELO. Sem marcar o modelo morto
+# nele, o EOL continua candidato em toda rotacao. Medido em 24h: o mesmo
+# EOL (google/gemma-4-31b-it) reapareceu 6 vezes na mesma sessao.
+MODEL_COOLDOWN = HOME / ".local/state/jarvis/provider-cooldown.json"
+
+
+def mark_model_cooldown(provider: str, model: str) -> None:
+    """Marca o modelo como caido no cooldown que a rotacao consulta.
+
+    O id tem de ser o do CATALOGO (provider/modelo): e' a chave que o
+    agent-model.py e o team.py leem. A sessao e o texto do erro dao o
+    provider e o modelo SEPARADOS (o id do modelo ainda sem o prefixo do
+    provider), entao o id do catalogo e' provider + "/" + modelo — e ele
+    so e' valido se o config do opencode conhece esse par.
+    """
+    if not provider or not model:
+        return
+    catalog = _opencode_providers().get(provider, {})
+    if model not in catalog:
+        return
+    model_id = catalog[model]
+    try:
+        MODEL_COOLDOWN.parent.mkdir(parents=True, exist_ok=True)
+        data = {}
+        if MODEL_COOLDOWN.is_file():
+            data = json.loads(MODEL_COOLDOWN.read_text(encoding="utf-8"))
+        data[model_id] = time.time()
+        MODEL_COOLDOWN.write_text(json.dumps(data, indent=1), encoding="utf-8")
+    except Exception:  # noqa: BLE001 — cooldown e' melhor-esforco
+        pass
+
+
 def _unquote(text: str | None) -> str:
     """Volta as sequencias de escape do campo quoted do log."""
     if not text:
@@ -455,6 +489,12 @@ def cmd_scan(args: argparse.Namespace) -> int:
             continue
         if not args.no_notify:
             ping(f"opencode: {e['class']} ({e['provider']})", line[:220])
+        # (27/11, medido) Modelo EOL: marca no cooldown que a rotacao
+        # consulta (provider-cooldown.json, por id do catalogo), senao o
+        # modelo morto volta a ser candidato em toda rotacao. Medido em
+        # 24h: o mesmo EOL reapareceu 6 vezes na mesma sessao.
+        if e["class"] == "MODEL" and "end of life" in e["error"]:
+            mark_model_cooldown(e["provider"], e["model"])
         # (15/11) ROTACAO AUTOMATICA: so para 429 (rate-limit). O
         # provider cai em cooldown e a sessao segue em outro modelo.
         rot = ""
