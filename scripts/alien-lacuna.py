@@ -105,8 +105,16 @@ def main():
                           "sources": [{"path": x["path"], "arxiv": x["arxiv"],
                                        "snippet": x["atom"]} for x in (left, right)],
                           "status": "hipotese — NAO evidencia; gate antes de treinar"})
+    # dedup de claims por frase normalizada (F142)
+    seen_claim, dedup = set(), []
+    for c in pairs:
+        key = re.sub(r"\W+", " ", c["claim"].lower()).strip()[:160]
+        if key in seen_claim: continue
+        seen_claim.add(key); dedup.append(c)
+    pairs = dedup
     pairs.sort(key=lambda p: (not p["promote"], p["availability_paths"]))
-    res = {"event": "alien_lacuna", "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    res = {"event": "alien_lacuna",
+           "atom_mode": "heuristic (LLM local apenas quando GPU livre; USE_LLM=0 agora)", "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "chunks": len(chunks), "atoms": len(uniq),
            "directions": directions, "audit_discarded": len(atoms)-len(uniq),
            "criterios_pre_registrados": {"actionability": "contem metrica/baseline/gate/custo",
