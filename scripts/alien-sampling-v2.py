@@ -52,12 +52,20 @@ def main():
     for c in pairs:
         if len(out) >= a.top: break
         aa = c["shared"][:2]
-        avail = sum(len(hs.search(f"{aa[0]} {aa[1]}", top_k=3, collection=coll,
-                     use_rerank=False)) for coll in COLLS)
-        score = round(c["coherence"] / max(1, avail), 3)
+        # Proxy antigo usava len(top_k=3) por colecao e saturava em 9.
+        # Agora: paths unicos + soma dos scores de rerank (BM25/RRF) em top_k=20.
+        hits = []
+        for coll in COLLS:
+            for h in hs.search(f"{aa[0]} {aa[1]}", top_k=20, collection=coll,
+                               use_rerank=False):
+                hits.append((h.path, float(h.score)))
+        avail_paths = len({path for path, _ in hits})
+        avail_score = round(sum(sc for _, sc in hits), 3)
+        score = round(c["coherence"] / max(1, avail_paths), 3)
         x, y = c["ev"]
         out.append({"id": f"dyn-{'_'.join(aa)}-{len(out)}", "atoms": c["shared"],
-                    "coherence": c["coherence"], "availability_hits": avail,
+                    "coherence": c["coherence"], "availability_paths": avail_paths,
+                    "availability_score_sum": avail_score,
                     "alien_score": score,
                     "hypothesis": f"Combinar '{aa[0]}' de {x['title'] or x['collection']} com '{aa[1]}' de {y['title'] or y['collection']} — ganho mensuravel com orçamento igual?",
                     "sources": [{"collection": z["collection"], "path": z["path"],
