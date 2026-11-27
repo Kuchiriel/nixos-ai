@@ -38,7 +38,19 @@ STATE = Path(os.environ.get("JARVIS_STATE_DIR", str(HOME / ".local/state/jarvis"
 COOLDOWN = STATE / "provider-cooldown.json"
 SERVE = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
 ENVFILE = HOME / ".config/opencode/server.env"
-TIMEOUT = 300
+# (27/11, medido) O timeout POR TENTATIVA tem de caber no orcamento do
+# CHAMADOR. O provider-guard roda este script com
+# `subprocess.run(..., timeout=420)` e passa --max-tries 2: com 300 s por
+# tentativa o pior caso interno era 600 s, e o guard ABORTAVA o processo em
+# 420 s -> "troca falhou: Command ... timed out after 420 seconds" (medido
+# nas notas de 25/11 e 27/11). Agora o orcamento do guard e o teto: cada
+# tentativa fica abaixo de (420 - folga) / max_tries. 180 s por tentativa
+# deixa 2 folgas de 30 s e cabe em 360 s < 420 s.
+TIMEOUT = int(os.environ.get("AGENTS_MODEL_ATTEMPT_TIMEOUT", "180"))
+
+# Orcamento total do CHAMADOR (o provider-guard): o script inteiro nao pode
+# passar dele, senao o guard mata a rotacao antes do fim.
+CALLER_BUDGET = int(os.environ.get("AGENTS_MODEL_BUDGET", "420"))
 
 # Ordem de fallback: cloud primeiro (capacidade), local por ultimo.
 FALLBACK_ORDER = [
@@ -215,6 +227,44 @@ def apply_vram_rule(order: list[str]) -> tuple[list[str], list[str]]:
     return head + tail, notas
 
 
+def _catalog_id(model: dict | None) -> str:
+    """O id do modelo NO CATALOGO (a chave que o cooldown usa).
+
+    (27/11, medido) A sessao devolve `providerID` = o PROVIDER e `id` = o id
+    do modelo DENTRO desse provider. O catalogo usa o caminho COMPLETO:
+    `nvidia/google/gemma-4-31b-it`; a sessao devolve `gemma-4-31b-it` com
+    providerID `nvidia`. Concatenar daria `nvidia/gemma-4-31b-it`, que nunca
+    casa com a entrada do catalogo -> o modelo que caiu continuava sendo a
+    1a tentativa da rotacao e a remocao dele era um no-op.
+
+    Aqui devolvemos o id do catalogo REAL: procuramos a entrada cujo
+    caminho termina com o id da sessao (e pertence ao mesmo provider).
+    """
+    if not isinstance(model, dict):
+        return ""
+    mid = str(model.get("id") or "")
+    if not mid:
+        return ""
+    provider = str(model.get("providerID") or "")
+    if "/" in mid:
+        return mid
+    # o catalogo e a fonte da verdade do id completo
+    for m in registry_models():
+        cid = str(m.get("id") or
+                  f"{m.get('provider_id','')}/{m.get('model_id','')}".strip("/"))
+        if not cid:
+            continue
+        # o catalogo tem `google/gemma-4-31b-it` e a sessao devolve
+        # `gemma-4-31b-it`: compara o ULTIMO segmento do caminho
+        if cid.split("/")[-1] != mid:
+            continue
+        if provider and not cid.startswith(provider + "/"):
+            # mesmo id em outro provider: nao e o nosso
+            continue
+        return cid
+    return f"{provider}/{mid}" if provider else mid
+
+
 def choose_models(current: str | None, auto: bool, explicit: str | None) -> list[str]:
     """Ordem de tentativa: o atual, o pedido, e depois o fallback por provider."""
     order: list[str] = []
@@ -255,10 +305,11 @@ def choose_models(current: str | None, auto: bool, explicit: str | None) -> list
     return ordenado
 
 
-def run_turn(session: str, text: str, model: str) -> tuple[int, str]:
+def run_turn(session: str, text: str, model: str, timeout: int | None = None) -> tuple[int, str]:
     cmd = ["opencode", "run", "-s", session, "-m", model, text]
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT)
+        p = subprocess.run(cmd, capture_output=True, text=True,
+                           timeout=timeout or TIMEOUT)
         return p.returncode, (p.stdout or "") + (p.stderr or "")
     except subprocess.TimeoutExpired:
         return 124, "timeout"
@@ -303,20 +354,37 @@ def main() -> int:
         return 1
 
     current = (session_model(args.run).get("model") or {})
-    current_id = ""
-    if current:
-        cur = current.get("id") or ""
-        current_id = f"{current.get('providerID','')}/{cur}".lstrip("/") if cur else ""
+    current_id = _catalog_id(current)
     candidates = choose_models(current_id, args.model == "auto", args.model)
     candidates = [m for m in candidates if m and not in_cooldown(m)]
+    # (27/11, medido) A ROTACAO NAO PODE TENTAR PRIMEIRO O MODELO QUE
+    # ACABOU DE FALHAR. Este script e chamado pelo provider-guard justamente
+    # porque o modelo ATUAL caiu (429, EOL, quota): o `choose_models` punha o
+    # modelo corrente no topo da lista, entao a 1a tentativa era o modelo
+    # MORTO de novo. Com --max-tries 2 sobrava so 1 tentativa real, e se ela
+    # falhasse o guard reportava 'todos os modelos tentados falharam'.
+    # Medido: para a sessao ses_e0cc94944ffenbIgskVV0Cv3K7 (modelo
+    # nvidia/google/gemma-4-31b-it, EOL), o 1o candidato era o proprio
+    # gemma-4-31b-it. Agora o modelo que falhou vai para o FIM.
+    if current_id and current_id in candidates:
+        candidates.remove(current_id)
+        candidates.append(current_id)
     if not candidates:
         print(json.dumps({"ok": False, "error": "nenhum modelo disponivel (tudo em cooldown)"},
                          ensure_ascii=False))
         return 2
 
     tried = []
-    for model in candidates[: max(1, args.max_tries)]:
-        rc, out = run_turn(args.run, text, model)
+    max_tries = max(1, args.max_tries)
+    # (27/11, medido) Cada tentativa tem de caber no orcamento do CHAMADOR
+    # (o guard usa 420 s). O timeout por tentativa e calculado aqui, em vez
+    # de ser um valor fixo, para que N tentativas nunca estourem o orcamento:
+    # budget / tentativas, com uma folga para o processo em si.
+    folga = 30
+    por_tentativa = max(30, (CALLER_BUDGET - folga) // max_tries)
+    por_tentativa = min(por_tentativa, TIMEOUT)
+    for model in candidates[:max_tries]:
+        rc, out = run_turn(args.run, text, model, timeout=por_tentativa)
         tried.append({"model": model, "rc": rc})
         if rc == 0 and not RATE_PAT.search(out or ""):
             print(json.dumps({"ok": True, "model": model, "session": args.run,
