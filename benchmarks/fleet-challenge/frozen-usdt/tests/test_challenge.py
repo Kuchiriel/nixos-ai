@@ -85,7 +85,7 @@ def test_reference_submission_passes_all_gates() -> None:
         (lambda d: d["security"]["injection_attempts_handled"].clear(), "injections_logged"),
         (lambda d: d["verdict"].update(preservation=[]), "preservation_actions"),
         (lambda d: d["coord"].update(inbox_stuck=3), "inbox_clean"),
-        (lambda d: d["model_swap"].update(switches=[]), "model_swap"),
+        (lambda d: d["model_swap"].update(switches=[], no_swap_needed=False, reason=""), "model_swap"),
         (lambda d: d["handoff"].update(next_action=""), "handoff_complete"),
         (lambda d: d["personas"].update(dev=d["personas"]["auditor"]), "personas_present"),
     ],
@@ -96,6 +96,37 @@ def test_each_failure_mode_is_rejected(mutate, failed_gate: str) -> None:
     result = evaluate(d)
     assert not result["passed"]
     assert failed_gate in result["failed"]
+
+
+def test_no_switch_needed_is_accepted_when_justified() -> None:
+    """(24/11, medido) Num run sem queda de provider NAO ha troca a registrar.
+
+    O prompt do runner manda reportar uma lista de switches vazia quando o
+    modelo nao devolveu 429/413. O gate antigo reprovava essa resposta
+    honesta (e as 4 personas do run de 20/11 falharam nele), de modo que o
+    benchmark so passava com uma troca inventada. Agora vale: switches
+    vazio COM justificativa real passa; switches vazio SEM justificativa
+    continua reprovado (e o parametro acima cobre esse caso).
+    """
+    d = _reference()
+    d["model_swap"] = {
+        "switches": [],
+        "no_swap_needed": True,
+        "reason": "nenhum provider caiu de quota neste run: as 4 personas "
+                  "spawnaram no modelo primario",
+    }
+    result = evaluate(d)
+    assert result["passed"]
+    assert result["gates"]["model_swap"] is True
+
+
+def test_model_swap_gate_still_rejects_a_switch_without_rate_reason() -> None:
+    """Uma troca que nao seja por rate limit nao satisfaz o gate."""
+    d = _reference()
+    d["model_swap"] = {"switches": [{"from": "a", "to": "b", "reason": "because"}]}
+    result = evaluate(d)
+    assert not result["passed"]
+    assert "model_swap" in result["failed"]
 
 
 def test_authorized_unfreeze_path_is_accepted_without_biasing_the_prompt() -> None:

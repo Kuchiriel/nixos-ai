@@ -50,28 +50,90 @@ AGENT_MSG = Path(__file__).resolve().parent / "agent-msg.sh"
 # dezenas de linhas iguais no log (429 repete a cada retry -> spam no peer)
 COOLDOWN_SEC = 900
 
+# (24/11, medido) CLASSES NUNCA PRODUZIU "RATE_LIMIT": o classificador
+# devolvia "RATE" (veja a lista abaixo) e a rotacao comparava com
+# "RATE_LIMIT" — duas strings diferentes. Resultado: a rotacao automatica de
+# modelo (o commit 86a5cc12, 15/11) NUNCA rodou, porque a condicao nunca era
+# verdadeira. Agora a lista e' explicita e compartilhada com o classificador.
+ROTATE_CLASSES = ("RATE", "RATE_LIMIT", "QUOTA", "MODEL")
+
 # classificação: (padrão no texto do erro, classe, dica acionável)
+#
+# (24/11, medido) Os padroes foram medidos no texto REAL do log do 2.2.6, que
+# nao bate com as mensagens HTTP crabras. Amostra do log vivo:
+#   "AI.Error: API rate limit exceeded ..."
+#   "AI.Error: Too Many Requests ..."
+#   "AI.Error: nv-gate: request too large for the upstream context ..."
+#   "AI.Error: Invalid request ..." (com o status HTTP em outra parte da linha)
+#   "AI.Error: Model 'nemotron-3-nano:30b' is currently unavailable."
+# O classificador antigo procurava "Too Many Requests" (que o 2.2.6 escreve
+# como "API rate limit exceeded") e "Bad Request" (que ele escreve como
+# "Invalid request"), entao TODO evento caia em OTHER: medido, 10 de 10
+# eventos classificados como OTHER depois do fix do regex.
 CLASSES = (
     ("ProviderHeaderTimeoutError", "TIMEOUT",
      "provider nao mandou headers em 5 min (contexto grande/fornecedor lento); "
      "opencode tenta +2x antes de desistir — considere trocar de modelo"),
+    ("API rate limit exceeded", "RATE",
+     "429 do provider (free tier saturado; varios agentes na mesma chave); "
+     "espere ~1 min ou troque de provider"),
     ("Too Many Requests", "RATE",
      "429 do provider (free tier saturado; varios agentes na mesma chave); "
      "espere ~1 min ou troque de provider"),
+    ("rate limit", "RATE",
+     "429 do provider (free tier saturado); troque de provider"),
+    ("daily free allocation", "QUOTA",
+     "cota diaria do provider esgotada (o erro traz o valor); troque de provider"),
     ("exceeds the available context size", "CTX",
      "request passou do contexto do server local; compacte a sessao"),
+    ("request too large for the upstream context", "CTX",
+     "o request passou do contexto REAL do modelo no upstream; "
+     "compacte a sessao ou troque de modelo"),
     ("Bad Request", "BADREQ",
      "400 do provider: prompt_tokens + max_tokens > contexto do modelo "
      "(ou request invalido); compacte a sessao"),
+    ("Invalid request", "BADREQ",
+     "400 do provider (o 2.2.6 escreve 'Invalid request' onde o outro "
+     "escrevia 'Bad Request'); prompt invalido ou acima do contexto; "
+     "compacte a sessao"),
+    ("is currently unavailable", "MODEL",
+     "o modelo do provider saiu do catalogo (EOL ou indisponivel); "
+     "troque de modelo"),
+    ("no longer available on OpenRouter", "MODEL",
+     "o modelo saiu do catalogo do OpenRouter (EOL); troque de modelo"),
     ("AI_APICallError", "API",
      "erro de API do provider; veja o log"),
 )
 
-LINE_RE = re.compile(
-    r'timestamp=(?P<ts>\S+)\s+level=ERROR.*?message="stream error".*?'
-    r'providerID=(?P<provider>\S+).*?modelID=(?P<model>\S+).*?'
-    r'session\.id=(?P<session>\S+).*?error\.error="(?P<error>[^"]+)"'
-)
+# (24/11, medido) O FORMATO DO LOG MUDOU COM O OPENCODE 2.2.6 E O GUARD
+# FICOU CEGO. O regex antigo exigia, na mesma linha:
+#   message="stream error" ... providerID=... modelID=... session.id=...
+#       ... error.error="..."
+# Medido no log vivo: 172 linhas com level=ERROR, ZERO casam com esse regex.
+# O 2.2.6 escreve o erro assim:
+#   timestamp=... level=ERROR run=... message="Failed to drain Session"
+#       cause="AI.Error: API rate limit exceeded\n ..." sessionID=ses_...
+# Consequencia medida: o provider do operator (ovhcloud/gpt-oss-20b) devolveu
+# 429 por 4 dias seguidos (21/11, 22/11, 23/11, 24/11) e o guard NENHUM
+# evento viu: sem aviso ao dono, sem rotacao de modelo, sem prova no bus.
+#
+# A ORDEM DOS CAMPOS VARIA (no log real, `cause=` vem ANTES de `sessionID=`),
+# por isso cada campo e' buscado por uma regex propria em vez de um regex
+# unico e ordenado.
+TS_RE = re.compile(r'timestamp=(?P<ts>\S+)\s+level=ERROR')
+MSG_RE = re.compile(r'message="(?:stream error|Failed to drain Session)"')
+PROVIDER_RE = re.compile(r'providerID=(?P<v>\S+)')
+MODEL_RE = re.compile(r'modelID=(?P<v>\S+)')
+SESSION_RE = re.compile(r'(?:sessionID=|session\.id=)(?P<v>\S+)')
+ERROR_RE = re.compile(r'(?:error\.error="(?P<v1>[^"]+)"|cause="(?P<v2>(?:[^"\\]|\\.)*)")')
+
+
+def _unquote(text: str | None) -> str:
+    """Volta as sequencias de escape do campo quoted do log."""
+    if not text:
+        return ""
+    return (text.replace("\\n", " ").replace('\\"', '"')
+                .replace("\\\\", "\\").strip())
 
 
 def classify(error: str) -> tuple[str, str]:
@@ -95,23 +157,35 @@ def parse_events(log_path: Path, since_min: int) -> list[dict]:
     except OSError:
         return events
     for line in tail.splitlines():
-        m = LINE_RE.search(line)
-        if not m:
+        if not TS_RE.search(line) or not MSG_RE.search(line):
+            continue
+        ts_m = TS_RE.search(line)
+        err_m = ERROR_RE.search(line)
+        if not ts_m or not err_m:
             continue
         try:
-            ts = datetime.fromisoformat(m["ts"].replace("Z", "+00:00"))
+            ts = datetime.fromisoformat(ts_m["ts"].replace("Z", "+00:00"))
         except ValueError:
             continue
         if ts < cutoff:
             continue
-        cls, hint = classify(m["error"])
+        # (24/11) O erro vem em dois formatos: error.error= (log antigo) e
+        # cause= (log do 2.2.6, com escapes). A sessao tambem: session.id=
+        # (antigo) ou sessionID= (2.2.6).
+        error = _unquote(err_m.group("v1") or err_m.group("v2"))
+        sess_m = SESSION_RE.search(line)
+        prov_m = PROVIDER_RE.search(line)
+        model_m = MODEL_RE.search(line)
+        if not error:
+            continue
+        cls, hint = classify(error)
         events.append({
             "ts": ts.isoformat(),
             "epoch": int(ts.timestamp()),
-            "provider": m["provider"],
-            "model": m["model"],
-            "session": m["session"],
-            "error": m["error"][:200],
+            "provider": (prov_m["v"].strip('"') if prov_m else ""),
+            "model": (model_m["v"].strip('"') if model_m else ""),
+            "session": (sess_m["v"].strip('"') if sess_m else ""),
+            "error": error[:200],
             "class": cls,
             "hint": hint,
         })
@@ -225,7 +299,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
         # (15/11) ROTACAO AUTOMATICA: so para 429 (rate-limit). O
         # provider cai em cooldown e a sessao segue em outro modelo.
         rot = ""
-        if e["class"] == "RATE_LIMIT" and not args.no_rotate and e.get("session"):
+        if e["class"] in ROTATE_CLASSES and not args.no_rotate and e.get("session"):
             rot = rotate_model(e["session"], e.get("provider", ""), e.get("model", ""))
             if rot:
                 print(f"provider-guard: rotacao: {rot}")

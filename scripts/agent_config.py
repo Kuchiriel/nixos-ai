@@ -88,12 +88,30 @@ class AgentConfig:
         return self.caminhos[chave]
 
     def env(self, chave: str) -> str:
+        """Valor de ambiente do config, com fallback quando a chave falta.
+
+        (25/11, medido) As duas URLs que ESCUTAM SO no IP do tailnet tinha
+        fallback de loopback, que recusa a conexão neste host:
+        AGENTS_OC_URL -> 127.0.0.1:4599 (Connection refused) e
+        COORD_MCP_URL -> 127.0.0.1:8765/mcp (idem). Os defaults agora sao os
+        enderecos que realmente respondem.
+        """
+        fallback = {
+            "AGENTS_OC_URL": "http://100.121.100.103:4599",
+            "COORD_MCP_URL": "http://100.121.100.103:8765/mcp",
+        }.get(chave)
+        if fallback is not None:
+            return self.ambiente.get(chave, fallback)
         return self.ambiente[chave]
 
     # compatibilidade com nomes de variáveis antigas (hardcoded)
     @property
     def OC_URL(self) -> str:
-        return self.ambiente.get("AGENTS_OC_URL", "http://127.0.0.1:4599")
+        # (25/11, medido) o fallback era 127.0.0.1:4599, mas o serve escuta
+        # SO no IP do tailnet -> Connection refused -> o roster marcava sessao
+        # VIVA como dead e o agent-msg.sh recusava a entrega ("nenhum alvo").
+        # O default agora e o endereco que realmente responde.
+        return self.ambiente.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
 
     @property
     def HUB_URL(self) -> str:
@@ -101,7 +119,10 @@ class AgentConfig:
 
     @property
     def COORD_URL(self) -> str:
-        return self.ambiente.get("COORD_MCP_URL", "http://127.0.0.1:8765/mcp")
+        # (25/11, medido) o coord-mcp tambem escuta SÓ no IP do tailnet
+        # (127.0.0.1:8765 recusa a conexão); o fallback antigo apontava
+        # para o loopback e quebrava o poll do bus.
+        return self.ambiente.get("COORD_MCP_URL", "http://100.121.100.103:8765/mcp")
 
     @property
     def ROSTER_PATH(self) -> str:
