@@ -17,6 +17,11 @@ LR=${LR:-1e-4}
 WARMUP=${WARMUP:-500}
 LOCK=${LOCK:-$OUT_DIR/.gpu-job.lock}
 STATUS="$OUT_DIR/f53-simplestories-status.log"
+# Testability: the unit checks and the GPU probe can be stubbed, and DRY_RUN=1
+# prints the trainer command instead of running it.
+SYSTEMCTL=${SYSTEMCTL:-systemctl --user}
+NVIDIA_SMI=${NVIDIA_SMI:-nvidia-smi}
+DRY_RUN=${DRY_RUN:-0}
 
 mkdir -p "$OUT_DIR/checkpoints"
 G=$(ls -dt /nix/store/*-gcc-*-lib/lib 2>/dev/null | head -1)
@@ -24,18 +29,31 @@ export LD_LIBRARY_PATH="$G:/run/opengl-driver/lib:/run/current-system/sw/share/n
 export TRITON_LIBCUDA_PATH=/run/opengl-driver/lib
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# F50 owns the GPU until its curve is complete.
-while systemctl --user is-active --quiet jarvis-f50-150m-60k; do
-  sleep 60
-done
+# F50 and the F52 extension own the GPU until their curves are complete.
+# Both are waited for explicitly: the F52 runner does not take the global
+# flock, so waiting only for the lock would not be enough.
+wait_for_units() {
+  while $SYSTEMCTL is-active --quiet jarvis-f50-150m-60k \
+     || $SYSTEMCTL is-active --quiet jarvis-f52-ext; do
+    printf 'F53 waiting for GPU units (%s)\n' "$(date -u +%H:%M:%S)" >> "$STATUS"
+    sleep 60
+  done
+}
+
+gpu_free() {
+  ! $NVIDIA_SMI --query-compute-apps=pid,process_name --format=csv,noheader,nounits \
+    | grep -q 'finetune'
+}
+
+wait_for_units
 
 # One global GPU lock plus a process check for trainers that do not use it.
 exec 9>"$LOCK"
 until flock -n 9; do
   sleep 60
 done
-while nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader,nounits \
-  | grep -q 'finetune'; do
+until gpu_free; do
+  printf 'F53 waiting for a free GPU (%s)\n' "$(date -u +%H:%M:%S)" >> "$STATUS"
   sleep 60
 done
 
@@ -61,13 +79,24 @@ if [ ! -s "$CORPUS" ] || [ ! -s "$STATS" ]; then
 fi
 
 for seed in $SEEDS; do
-  "$PYTHON" -u "$REPO_ROOT/scripts/f32-wordlevel.py" \
-    --npy "$CORPUS" --d "$DEPTH" --steps "$STEPS" --seed "$seed" --batch 8 \
-    --no-ss --lr "$LR" --warmup "$WARMUP" --device cuda \
-    --ckpt "$OUT_DIR/checkpoints/f53-simplestories-150m-s${seed}.pt" \
-    --out "$OUT_DIR/f53-simplestories-150m-s${seed}.json" \
-    > "$OUT_DIR/f53-simplestories-150m-s${seed}.log" 2>&1
-  rc=$?
+  # Re-check before every seed: another lane may take the GPU between seeds.
+  until gpu_free; do
+    printf 'F53 waiting for a free GPU before seed %s (%s)\n' "$seed" "$(date -u +%H:%M:%S)" >> "$STATUS"
+    sleep 60
+  done
+  TRAIN_CMD=("$PYTHON" -u "$REPO_ROOT/scripts/f32-wordlevel.py"
+    --npy "$CORPUS" --d "$DEPTH" --steps "$STEPS" --seed "$seed" --batch 8
+    --no-ss --lr "$LR" --warmup "$WARMUP" --device cuda
+    --ckpt "$OUT_DIR/checkpoints/f53-simplestories-150m-s${seed}.pt"
+    --out "$OUT_DIR/f53-simplestories-150m-s${seed}.json")
+  if [ "$DRY_RUN" = "1" ]; then
+    printf 'DRY_RUN seed=%s: %s\n' "$seed" "${TRAIN_CMD[*]}" \
+      >> "$OUT_DIR/f53-simplestories-150m-s${seed}.log"
+    rc=0
+  else
+    "${TRAIN_CMD[@]}" > "$OUT_DIR/f53-simplestories-150m-s${seed}.log" 2>&1
+    rc=$?
+  fi
   printf 'F53_SIMPLESTORIES_150M_S%s_RC=%s\n' "$seed" "$rc" >> "$STATUS"
   if [ "$rc" -ne 0 ]; then
     exit "$rc"

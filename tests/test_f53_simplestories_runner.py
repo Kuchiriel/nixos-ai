@@ -53,12 +53,27 @@ class F53SimpleStoriesTests(unittest.TestCase):
         source = RUNNER.read_text(encoding="utf-8")
         self.assertIn("jarvis-f50-150m-60k", source)
         self.assertIn("flock -n 9", source)
-        self.assertIn("nvidia-smi --query-compute-apps", source)
+        self.assertIn("--query-compute-apps", source)
         self.assertIn('SEEDS=${SEEDS:-"42 43"}', source)
         self.assertIn("STEPS=${STEPS:-9600}", source)
         self.assertIn("DEPTH=${DEPTH:-1216}", source)
         self.assertIn("--target-bytes 200000000", source)
         self.assertIn("F53_SIMPLESTORIES_DONE", source)
+
+    def test_runner_waits_for_the_f52_extension_unit(self):
+        source = RUNNER.read_text(encoding="utf-8")
+        self.assertIn("jarvis-f52-ext", source)
+        self.assertIn("wait_for_units", source)
+        self.assertIn("until gpu_free; do", source)
+        self.assertIn("before seed", source)
+
+    def test_runner_exposes_stubs_and_dry_run_for_serialization_smoke(self):
+        source = RUNNER.read_text(encoding="utf-8")
+        self.assertIn('SYSTEMCTL=${SYSTEMCTL:-systemctl --user}', source)
+        self.assertIn('NVIDIA_SMI=${NVIDIA_SMI:-nvidia-smi}', source)
+        self.assertIn('DRY_RUN=${DRY_RUN:-0}', source)
+        self.assertIn('TRAIN_CMD=("$PYTHON" -u', source)
+        self.assertIn('"${TRAIN_CMD[@]}" >', source)
 
 
 if __name__ == "__main__":
