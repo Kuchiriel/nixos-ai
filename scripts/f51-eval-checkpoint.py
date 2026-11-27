@@ -64,21 +64,20 @@ def main() -> int:
     correct = 0
     validation_limit = min(args.val_tokens, val_count - args.seq - 1)
     with torch.no_grad():
-        for offset in range(0, validation_limit, args.seq * args.batch):
-            offsets = np.arange(
-                offset,
-                min(offset + args.seq * args.batch, validation_limit),
-                args.seq,
-                dtype=np.int64,
-            )
+        # Mirror f32-wordlevel.py exactly: contiguous windows from offset 0,
+        # grouped in batches of seq*batch. The previous implementation reused
+        # the same offsets inside every group, which over-counted tokens.
+        starts = np.arange(0, validation_limit, args.seq, dtype=np.int64)
+        for group in range(0, len(starts), args.batch):
+            offsets = starts[group:group + args.batch]
             if len(offsets) < 2:
                 break
             x_numpy = np.stack(
-                [np.asarray(tokens[offset + train_count + j:offset + train_count + j + args.seq])
+                [np.asarray(tokens[train_count + j:train_count + j + args.seq])
                  for j in offsets]
             )
             y_numpy = np.stack(
-                [np.asarray(tokens[offset + train_count + j + 1:offset + train_count + j + 1 + args.seq])
+                [np.asarray(tokens[train_count + j + 1:train_count + j + 1 + args.seq])
                  for j in offsets]
             )
             x = torch.from_numpy(x_numpy.astype(np.int64, copy=False)).to(args.device)
