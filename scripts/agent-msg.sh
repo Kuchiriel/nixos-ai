@@ -50,11 +50,13 @@
 #   agent-msg.sh --cancel m-1793639000-1
 #
 # LOG (auditoria pós-compact): ~/projects/AGENTS-MSG.log
+# (26/11, medido) O caminho pode ser apontado por AGENTS_MSG_LOG para o
+# teste isolar o log (o default continua sendo o log da casa).
 set -eu
 PATH="$HOME/.nix-profile/bin:/run/current-system/sw/bin:$PATH"
 HERE="$(dirname "$(realpath "$0")")"
 ROSTER="$HERE/agent-roster.py"
-LOG="$HOME/projects/AGENTS-MSG.log"
+LOG="${AGENTS_MSG_LOG:-$HOME/projects/AGENTS-MSG.log}"
 mkdir -p "$(dirname "$LOG")" /tmp/opencode
 
 # ── COMUNICACAO VISIVEL (19/11, pedido do dono) ───────────────────────
@@ -65,8 +67,19 @@ mkdir -p "$(dirname "$LOG")" /tmp/opencode
 # (VIS_MAX_PER_HOUR, default 12/h com gap de 3 min) ja limita o volume:
 # isto e' uma amostra legivel, o arquivo inteiro continua no LOG e no bus.
 # Sem script novo: reusa o vis-enqueue que ja existe.
+#
+# (24/11, medido) A FILA VIROU UM LOG E ATRASOU O DONO. Medido: 88 itens, dos
+# quais 80 eram mensagens de agente e 73 dessas eram AVISO/NOTA (nao pediam
+# acao nenhuma); a fila esvazia UM item por idle, entao os 8 pedidos de
+# acao reais estavam atras de 73 avisos. Agora so entra na fila visivel o
+# que PEDE ACAO (o tipo `ask`): aviso e nota ficam no LOG e no bus (onde ja
+# estavam), e nao viram um /goal na sessao do dono. O digest/filha real
+# volta a ser o que o dono ve primeiro.
 vis_visible() {
     local rem="$1" tipo="$2" alvo="$3" texto="$4" sessao_alvo="$5"
+    # so pedido de acao vira tarefa visivel; aviso/nota e' informacao, e o
+    # dono le isso no bus e no hub.
+    [ "$tipo" = "ask" ] || return 0
     command -v "$HOME/bin/vis-enqueue" >/dev/null 2>&1 || return 0
     local alvo_vis=""
     alvo_vis=$(cat "$HOME/.local/state/jarvis/vis-session" 2>/dev/null)
@@ -84,11 +97,11 @@ OC_URL="${AGENTS_OC_URL:-$(python3 -c "
 import json, sys
 try:
     cfg = json.loads(open('/home/nixos/projects/nixos-ai/scripts/agent-config.json').read())
-    print(cfg.get('ambiente', {}).get('AGENTS_OC_URL', 'http://127.0.0.1:4599'))
+    print(cfg.get('ambiente', {}).get('AGENTS_OC_URL', 'http://100.121.100.103:4599'))
 except Exception:
-    print('http://127.0.0.1:4599', file=sys.stderr)
+    print('http://100.121.100.103:4599', file=sys.stderr)
     sys.exit(1)
-" 2>/dev/null || echo "http://127.0.0.1:4599")}"
+" 2>/dev/null || echo "http://100.121.100.103:4599")}"
 OC_ENVFILE="${AGENTS_OC_ENVFILE:-$HOME/.config/opencode/server.env}"
 OC_USER="${OPENCODE_SERVER_USERNAME:-opencode}"
 OC_PASS="${OPENCODE_SERVER_PASSWORD:-}"
@@ -131,11 +144,19 @@ TEXTO="$*"
 # ── pending: pedidos sem resposta ─────────────────────────────────────
 if [ "$MODO" = "pending" ]; then
     [ -f "$LOG" ] || { echo "sem log"; exit 0; }
+    # (26/11, medido) A CHAVE do pedido e do resposta nao batia: o pedido e
+    # gravado como `$5 = id=m-1795...` e a resposta traz `$6 = re=m-1795...`.
+    # O awk tirava o prefixo "re=" e guardava `m-1795...`, enquanto o pedido
+    # ficava sob `id=m-1795...` => NENHUMA resposta fechava um pedido e a
+    # fila de pendentes crescia para sempre (medido: 104 asks, todos ainda
+    # "pendentes" mesmo com a resposta entregue). Agora as duas pontas usam a
+    # MESMA chave (o id sem prefixo) e o texto do pedido e lido de $7 (antes
+    # era $6, que era o campo `re=`).
     awk -F' \\| ' '
-        $3=="ask" {per[$5]=1; ordem[++n]=$5; dono[$5]=$4; txt[$5]=$6}
-        $6 ~ /re=/ {split($6,a,"re="); gsub(/ .*/,"",a[2]); resposta[a[2]]=1}
+        $3=="ask" {split($5,a,"id="); per[a[2]]=1; ordem[++n]=a[2]; dono[a[2]]=$4; txt[a[2]]=$7}
+        $6 ~ /re=/ && $6 !~ /re=-/ {split($6,a,"re="); gsub(/ .*/,"",a[2]); resposta[a[2]]=1}
         END {for (i=1;i<=n;i++) if (per[ordem[i]] && !resposta[ordem[i]])
-              print ordem[i]" -> "dono[ordem[i]]" | "txt[ordem[i]]}' "$LOG" | tail -20
+              print "id="ordem[i]" -> "dono[ordem[i]]" | "txt[ordem[i]]}' "$LOG" | tail -20
     exit 0
 fi
 
@@ -344,6 +365,13 @@ else:
                               f"({', '.join(hit)}) — envie como --note ou use "
                               f"--force", "targets": [], "avisos": []}))
             sys.exit(1)
+        # (25/11, medido) SEM overlap o alvo TEM de entrar na lista. Antes o
+        # `else` era do `if hit:` e o bloco `elif me and not force:` nao
+        # acrescentava nada: com claim do remetente e sem overlap o alvo era
+        # DESCARTADO em silencio -> "agent-msg: nenhum alvo (modo=<nome>)".
+        # Medido: `bash scripts/agent-msg.sh --to challenge-dev ...` devolvia
+        # "nenhum alvo" mesmo com a sessao do alvo VIVA na API.
+        targets.append(alvo(a))
     else:
         targets.append(alvo(a))
 

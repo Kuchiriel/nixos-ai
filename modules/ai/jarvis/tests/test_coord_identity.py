@@ -35,6 +35,14 @@ def test_current_session_from_mcp_pid(cr, monkeypatch):
 def test_current_session_empty_without_signals(cr, monkeypatch):
     monkeypatch.delenv("OPENCODE_SESSION_ID", raising=False)
     monkeypatch.delenv("OPENCODE_PID", raising=False)
+    # (24/11, medido) Este teste falhava DENTRO de uma sessao opencode: sem
+    # as duas variaveis de ambiente, current_session() ainda acha a sessao pelo
+    # ARVORE DE PROCESSOS (o terceiro caminho, medido em 08/11 para o MCP do
+    # serve). Rodando a suite dentro do proprio opencode, o ancestral existe e
+    # a funcao devolvia uma sessao de verdade. O teste quer verificar o
+    # caminho "sem sinal nenhum", entao o ancestral tambem precisa ser
+    # neutralizado — como ja e' feito nos outros testes deste arquivo.
+    monkeypatch.setattr(cr, "_session_from_ancestors", lambda: "")
     assert cr.current_session() == ""
 
 
