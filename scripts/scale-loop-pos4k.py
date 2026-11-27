@@ -1,0 +1,458 @@
+#!/usr/bin/env python3
+"""F1: curva de escala COM OTIMIZACOES dos papers (nao teste ingenuo).
+
+3 escalas (10M/50M/150M) × 3 variantes:
+  plain     — transformer normal
+  loop+core — 4 passes do bloco recorrente COM reinjecao u + L2 (Dory)
+  loop+full — loop+core + nGPT scales + LoRA r=8 por loop (Dory+Meta)
+
+MESMO compute (mesmo n de tokens vistos e passos). Mede val loss, tok/s
+e tokens gerados ate parar. Se uma variante for pior, o relatorio inclui
+diagnostico (loss curve, grad norm) para ENTENDER o por que.
+
+Papers: arXiv 2611.03998 (Dory/NVIDIA), 2610.40325 (Meta loop),
+2402.17764 (BitNet b1.58), 2504.16580 (INR — nao usado aqui).
+"""
+from __future__ import annotations
+import argparse, json, math, random, time
+from pathlib import Path
+import os as _os
+import torch
+from torch import nn
+
+DATA = Path("/home/nixos/projects/build-nanogpt/input.txt")
+
+
+def seed(s):
+    random.seed(s); torch.manual_seed(s)
+    if torch.cuda.is_available(): torch.cuda.manual_seed_all(s)
+
+
+def _rope(x):
+    """RoPE nos pares de dims de q/k (b, h, t, dh)."""
+    dh = x.shape[-1]
+    t = x.shape[2]
+    pos = torch.arange(t, device=x.device).float()
+    freq = 1.0 / (10000 ** (torch.arange(0, dh, 2, device=x.device).float() / dh))
+    ang = pos[:, None] * freq[None, :]
+    a, b = x[..., 0::2], x[..., 1::2]
+    return torch.stack([a * torch.cos(ang) - b * torch.sin(ang),
+                        a * torch.sin(ang) + b * torch.cos(ang)], dim=-1).flatten(-2)
+
+
+class Attn(nn.Module):
+    def __init__(self, d, heads, scale_in=False):
+        super().__init__()
+        self.h, self.dh = heads, d // heads
+        # init escalada por 1/sqrt(d): com d=1216 o init fixo 0.02 faz
+        # q@k^T/sqrt(dh) saturar o softmax (loss plateau ~3.3 = ln(65)).
+        std = d ** -0.5
+        self.q = nn.Parameter(torch.randn(d, d) * std)
+        self.k = nn.Parameter(torch.randn(d, d) * std)
+        self.v = nn.Parameter(torch.randn(d, d) * std)
+        self.o = nn.Parameter(torch.randn(d, d) * std)
+        self.scale_in = scale_in
+        if scale_in:
+            self.alpha = nn.Parameter(torch.tensor(0.05))  # residual rate
+
+    def forward(self, x, mask=None, cache=None, causal=False):
+        b, t, d = x.shape
+        call = isinstance(self.q, nn.Module)  # SpecLinear/LoRALinear
+        q = (self.q(x) if call else x @ self.q).view(b, t, self.h, self.dh).transpose(1, 2)
+        k = (x @ self.k).view(b, t, self.h, self.dh).transpose(1, 2)
+        v = (self.v(x) if call else x @ self.v).view(b, t, self.h, self.dh).transpose(1, 2)
+        if getattr(self, "pos_mode", "learned") == "rope":
+            q, k = _rope(q), _rope(k)
+        if cache is not None:  # F15: KV cache real (per_loop ou last-loop)
+            ck, cv = cache
+            k = torch.cat([ck, k], dim=2)
+            v = torch.cat([cv, v], dim=2)
+        new_cache = (k.detach(), v.detach())
+        # Escala correta: heads = d//64 mantem dh=64, logo q@k^T ~ sqrt(d)
+        # e /sqrt(dh) deixa a escala crescer com sqrt(d) -> softmax satura
+        # em d=1216 (loss plateau ~3.3). Dividir por sqrt(h) compensa.
+        scale = math.sqrt(self.dh * self.h)   # = sqrt(d)
+        scores = q @ k.transpose(-2, -1) / scale
+        if getattr(self, "pos_mode", "learned") == "alibi":
+            idx = torch.arange(t, device=q.device)
+            bias = -(idx.view(1, 1, t, 1) - idx.view(1, 1, 1, t)).abs().float()
+            slope = torch.arange(1, self.h + 1, device=q.device).float().reciprocal()
+            scores = scores + bias * slope.view(1, self.h, 1, 1)
+        if causal:
+            # mascara causal ancorada no fim do cache (q curto, k longo)
+            klen = k.shape[2]
+            ones = torch.ones((q.shape[2], klen), dtype=torch.bool, device=q.device)
+            m = torch.tril(ones, diagonal=klen - q.shape[2]).unsqueeze(0).unsqueeze(0)
+            scores = scores.masked_fill(~m, float("-inf"))
+        att = torch.softmax(scores, -1)
+        out = (att @ v).transpose(1, 2).contiguous().view(b, t, d) @ self.o
+        if self.scale_in:
+            y = nn.functional.normalize(x + self.alpha * out, dim=-1)
+        else:
+            y = x + out
+        return (y, new_cache) if cache is not None else y
+
+    def ai_step(self, h, u):
+        """Cross-attention parameter-free: Q=h, K=V=u (Attention Injection)."""
+        b, t, d = h.shape
+        q = (h @ self.q if not isinstance(self.q, nn.Module) else self.q(h))
+        k = u @ self.k if not isinstance(self.k, nn.Module) else self.k(u)
+        v = u @ self.v if not isinstance(self.v, nn.Module) else self.v(u)
+        q = q.view(b, t, self.h, self.dh).transpose(1, 2)
+        k = k.view(b, t, self.h, self.dh).transpose(1, 2)
+        v = v.view(b, t, self.h, self.dh).transpose(1, 2)
+        scale = math.sqrt(self.dh * self.h)
+        a = torch.softmax(q @ k.transpose(-2, -1) / scale, -1)
+        o = (a @ v).transpose(1, 2).contiguous().view(b, t, d) @ self.o
+        return nn.functional.normalize(h + o, dim=-1) if self.scale_in else h + o
+
+
+
+
+class Block(nn.Module):
+    def __init__(self, d, heads, scale_in=False):
+        super().__init__()
+        self.ln = nn.LayerNorm(d)
+        self.att = Attn(d, heads, scale_in)
+        self.ff = nn.Sequential(nn.Linear(d, 4*d), nn.GELU(), nn.Linear(4*d, d))
+        self.scale_in = scale_in
+        if scale_in:
+            self.beta = nn.Parameter(torch.tensor(0.05))
+
+    def forward(self, x, cache=None, causal=False):
+        ln = self.ln(x)
+        r = self.att(ln, cache=cache, causal=causal)
+        x, new_cache = r if cache is not None else (r, None)
+        f = self.ff(self.ln(x))
+        if self.scale_in:
+            y = nn.functional.normalize(x + self.beta * f, dim=-1)
+        else:
+            y = x + f
+        return (y, new_cache) if cache is not None else y
+
+
+class LoRALinear(nn.Module):
+    def __init__(self, w: nn.Parameter, r=8, alpha=2.0):
+        super().__init__()
+        self.register_buffer("base", w.detach().clone())
+        self.A = nn.Parameter((torch.randn(r, w.shape[0]) * 0.01).to(w.device))
+        self.B = nn.Parameter(torch.zeros(w.shape[1], r, device=w.device))
+        self.alpha = alpha
+
+    def forward(self, x):
+        return x @ self.base + (x @ self.A.T) @ self.B.T * self.alpha
+
+
+class SpecLinear(nn.Module):
+    """W^(l) = W + DeltaW^(l) — Meta 2610.40325 sec 2.2."""
+    def __init__(self, w: nn.Parameter, r=8):
+        super().__init__()
+        self.register_buffer("base", w.detach().clone())
+        self.A = nn.Parameter(torch.randn(r, w.shape[0]) * 0.01)
+        self.B = nn.Parameter(torch.zeros(w.shape[1], r))
+
+    def forward(self, x):
+        return x @ self.base + (x @ self.A.T) @ self.B.T
+
+
+class TernarySpecLinear(nn.Module):
+    """W^(l) = W + ternarizado(A,B) — BitNet b1.58 nos adapters por loop.
+
+    Ternarizacao com straight-through: frente usa sinal(-1/0/+1), gradiente
+    volta como se fosse identidade (estimador de Rumelhart/Hinton).
+    """
+    def __init__(self, w: nn.Parameter, r=8, alpha=2.0):
+        super().__init__()
+        self.register_buffer("base", w.detach().clone())
+        self.A = nn.Parameter(torch.randn(r, w.shape[0]) * 0.01)
+        self.B = nn.Parameter(torch.zeros(w.shape[1], r))
+        self.alpha = alpha
+
+    @staticmethod
+    def tern(x):
+        # escala: media de |x| por tensor, como BitNet
+        scale = x.abs().mean().clamp_min(1e-8)
+        q = torch.clamp(torch.round(x / scale), -1, 1)
+        return (q + (x / scale - q).detach()) * scale  # STE
+
+    def forward(self, x):
+        dW = self.tern(self.A.T @ self.B.T) * self.alpha
+        return x @ self.base + x @ dW
+
+
+class LatentCompress(nn.Module):
+    """HLA (2610.07940): residual -> latente r<<d; query le direto."""
+    def __init__(self, d, r=256):
+        super().__init__()
+        self.down = nn.Linear(d, r, bias=False)
+        self.up = nn.Linear(r, d, bias=False)
+
+    def forward(self, x):
+        return x + self.up(self.down(x))
+
+
+class ScaleLM(nn.Module):
+    """input(2) + recurrent(4) + output(2) blocos; variantes ligam u+L2 e/ou LoRA."""
+    def __init__(self, vocab, d, variant):
+        super().__init__()
+        self.d, self.variant = d, variant
+        self.scale_in = variant in ("loop_full", "ngpt_only", "loop_spec", "kv_last", "loop_spec_tern", "flt_ngpt", "hla_only", "hla_last")
+        self.variant_flt = variant in ("flt_only", "flt_ngpt")
+        self.tok = nn.Embedding(vocab, d)
+        import os as _pos_os
+        self.pos_rows = int(_pos_os.environ.get("POS_ROWS", "4096"))
+        self.pos_mode = _pos_os.environ.get("POS_MODE", "learned")
+        self.pos = nn.Embedding(self.pos_rows, d)
+        n_in, n_rec, n_out = 2, 4, 2
+        # heads divisor exato de d (d=1768 nao e' divisivel por 27 -> shape bug)
+        heads = 8
+        while d % heads != 0:
+            heads += 1
+        self.blocks = nn.ModuleList([Block(d, heads, self.scale_in) for _ in range(n_in+n_rec+n_out)])
+        for _blk in self.blocks:
+            _blk.att.pos_mode = self.pos_mode
+        self.ln = nn.LayerNorm(d)
+        self.head = nn.Linear(d, vocab)
+        if variant in ("hla_only", "hla_last"):
+            # comprimir o residual antes de cada bloco do loop
+            self.hla = nn.ModuleList([LatentCompress(d, 256)
+                                      for _ in range(n_rec)])
+        if variant == "kv_last":
+            # Dory 2611.03998 sec 6.1: cache do ULTIMO loop sobrescreve os
+            # anteriores -> KV mem tem tamanho de 1 loop, nao 4.
+            self.kv_last = True
+        if variant in ("loop_spec", "kv_last", "loop_spec_tern", "flt_only", "flt_ngpt", "hla_only", "hla_last"):
+            # Meta 2610.40325 sec 2.2: W^(l) = W + DeltaW^(l), com adapters
+            # LOOP-ESPECIFICOS (cada passo do bloco recorrente tem os seus).
+            for bi in range(n_in, n_in + n_rec):
+                blk = self.blocks[bi]
+                blk.att._spec_adapters = {}
+                for attr in ("q", "v"):
+                    W = getattr(blk.att, attr)
+                    for l in range(4):
+                        r = 8
+                        # registrar como atributos do MODULO: dict Python
+                        # comum NAO registra Parameter -> .to(device) nao move
+                        mod = (TernarySpecLinear(W, r)
+                               if variant == "loop_spec_tern" else SpecLinear(W, r))
+                        setattr(blk.att, f"_spec_{attr}_{l}", mod)
+                        blk.att._spec_adapters[(attr, l)] = mod
+        if variant == "ngpt_only":
+            pass  # so a normalizacao nGPT/L2, sem LoRA
+        if variant == "frozen_qv":
+            for blk in self.blocks:
+                for attr in ("q", "v"):
+                    getattr(blk.att, attr).requires_grad_(False)
+        if variant == "loop_full":
+            for blk in self.blocks[n_in:n_in+n_rec]:
+                for attr in ("q", "v"):
+                    w = getattr(blk.att, attr)
+                    # remover o Parameter e registrar o LoRA como submodule
+                    # (object.__setattr__ NAO registra -> .to(device) nao move)
+                    del blk.att._parameters[attr]
+                    setattr(blk.att, attr, LoRALinear(w))
+
+    def forward(self, x, causal=False):
+        t = x.shape[1]
+        h = self.tok(x) + self.pos(torch.arange(t, device=x.device))
+        for i, blk in enumerate(self.blocks):
+            if i == 2 and self.variant != "plain":
+                u = h.detach().clone()  # Dory: representacao fixa de entrada
+                for l in range(4):  # total 4 passes do bloco recorrente
+                    h = nn.functional.normalize(h + u, dim=-1)  # reinjecao + L2
+                    if self.variant in ("hla_only", "hla_last"):
+                        h = self.hla[l](h)
+                    if self.variant_flt and l > 0:
+                        # F29: Attention Injection (paper 2605.18797) —
+                        # Q = estado recorrente, K/V = entrada injetada u.
+                        # Reutiliza WQ/WK/WV, sem parametros novos.
+                        h = blk.att.ai_step(h, u)
+                    if self.variant in ("loop_spec", "kv_last", "loop_spec_tern", "flt_only", "flt_ngpt", "hla_only", "hla_last"):
+                        att = blk.att
+                        saved = {}
+                        for attr in ("q", "v"):
+                            saved[attr] = getattr(att, attr)
+                            mod = att._spec_adapters[(attr, l)]
+                            # nn.Module nao deixa atribuir modulo num slot de
+                            # Parameter: apagar o slot e setattr normal (F1)
+                            del att._parameters[attr]
+                            setattr(att, attr, mod)
+                        h = blk(h)
+                        for attr, W in saved.items():
+                            # devolver o slot de Parameter antes de restaurar
+                            mod = getattr(att, attr)
+                            del att._modules[attr]
+                            att._parameters[attr] = W
+                            setattr(att, attr, W)
+                    else:
+                        h = blk(h, causal=causal)
+            else:
+                h = blk(h, causal=causal)
+        return self.head(self.ln(h))
+
+
+    @torch.no_grad()
+    def forward_cached(self, token, pos, state, mode="last"):
+        """Decode incremental. state = {'caches': {(bi,l):(K,V)}, 'u': tensor}."""
+        b = token.shape[0]
+        h = self.tok(token) + self.pos(torch.tensor([pos], device=token.device))
+        caches = state["caches"]
+        # inicializar caches VAZIOS (shape correta) para que o primeiro passo
+        # tambem retorne K/V e o cache seja realmente mantido
+        if not caches:
+            d0 = self.blocks[0].att.dh
+            h0 = self.blocks[0].att.h
+            empty = (torch.zeros((b, h0, 0, d0), device=token.device, dtype=h.dtype),
+                     torch.zeros((b, h0, 0, d0), device=token.device, dtype=h.dtype))
+            for i, blk in enumerate(self.blocks):
+                if i == 2 and self.variant != "plain":
+                    for l in range(4):
+                        caches[(i, l)] = empty
+                else:
+                    caches[(i, 0)] = empty
+        for i, blk in enumerate(self.blocks):
+            if i == 2 and self.variant != "plain":
+                u = h.detach().clone()  # reinjecao por token (como no forward)
+                for l in range(4):
+                    h = nn.functional.normalize(h + u, dim=-1)
+                    key = (i, l)
+                    cache = caches.get(key) if mode == "per_loop" else caches.get((i, "last"))
+                    r = blk(h, cache=cache)
+                    h, nc = r if cache is not None else (r, None)
+                    if nc is not None:
+                        caches[key] = nc
+                    if mode == "last":
+                        caches[(i, "last")] = nc  # sobrescreve: KV de 1 loop
+            else:
+                c0 = caches.get((i, 0))
+                r = blk(h, cache=c0)
+                h, nc = r if c0 is not None else (r, None)
+                if nc is not None:
+                    caches[(i, 0)] = nc
+        return self.head(self.ln(h))
+
+def lo_steps(model, d):
+    # F19: orcamento configuravel para descartar under-training em 50M
+    env = _os.environ.get("SCALE_STEPS", "")
+    if env:
+        return int(env)
+    # ERRO 24/11 (2a vez): batch reduzido para 8 em GPU cortou tokens vistos
+    # de 2.46M para 0.82M — 150M ficou under-trained (loss 3.35) e parecia
+    # "arquitetura pior". Correcao: TOKENS VISTOS constantes em todas escalas.
+    # 800 passos x batch 24 x 128 = 2.457M tokens (referencia 50M).
+    # Com batch 8: 800*24/8 = 2400 passos para os mesmos 2.457M tokens.
+    # F21: batch configuravel para caber junto com RAG e job de outro agente
+    BATCH = int(_os.environ.get("SCALE_BATCH", "8"))
+    TARGET_TOKENS = 800 * 24 * 128
+    return max(800, TARGET_TOKENS // (BATCH * 128))
+
+
+def run(scale, variant, device, seed_v):
+    import sys
+    seed(seed_v)
+    text = DATA.read_text(encoding="utf-8")
+    n = int(len(text)*0.9)
+    chars = sorted(set(text)); stoi = {c:i for i,c in enumerate(chars)}
+    ids = [stoi[c] for c in text[:n]]; vids = [stoi[c] for c in text[n:]]
+    # calibrado: params ~ 8 blocos x 12 d^2 => d=320~10M, 704~50M, 1216~150M
+    # 150M -> d=1216 -> 142M reais; 300M -> d~1768
+    d_map = {10: 320, 50: 704, 150: 1216, 300: 1768}
+    d = d_map[scale]
+    model = ScaleLM(len(chars), d, variant).to(device)
+    params = sum(p.numel() for p in model.parameters())
+    steps = lo_steps(model, params)
+    # foreach=False evita o pico do _multi_tensor_adam (foi onde 300M OOMou)
+    # F7: MESMO otimizador em 150M e 300M (controla o confound medido)
+    if scale in (50, 150, 300):
+        opt = torch.optim.Adafactor(model.parameters(), lr=3e-4,
+                                    beta2_decay=-0.8, eps=(None, 0.001))
+    else:
+        opt = torch.optim.AdamW(model.parameters(), lr=3e-4, foreach=False)
+    t0 = time.perf_counter(); model.train(); seen = 0
+    losses = []
+    for step in range(1, steps+1):
+        _b = int(_os.environ.get("SCALE_BATCH", "8"))
+        st = torch.randint(0, len(ids)-128-1, (_b,))
+        x = torch.tensor([ids[k:k+128] for k in st.tolist()[:_b]], device=device)
+        y = torch.tensor([ids[k+1:k+1+128] for k in st.tolist()[:_b]], device=device)
+        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+            loss = nn.functional.cross_entropy(model(x).reshape(-1, len(chars)).float(), y.reshape(-1))
+        opt.zero_grad(); loss.backward(); opt.step()
+        seen += x.numel(); losses.append(round(float(loss.detach()), 4))
+        if step % max(50, steps//5) == 0:
+            print(json.dumps({"scale": scale, "v": variant, "step": step,
+                              "loss": losses[-1]}), flush=True)
+    train_s = time.perf_counter()-t0
+    model.eval(); tot=0.0; cnt=0
+    with torch.no_grad():
+        for k in range(0, len(vids)-128, 128*24):
+            ch = vids[k:k+128*24]
+            if len(ch) < 129: break
+            xs=[ch[i:i+128] for i in range(0,len(ch)-128,128)]
+            if not xs: break
+            x=torch.tensor(xs,device=device)
+            y=torch.tensor([ch[i+1:i+1+128] for i in range(0,len(ch)-128,128)],device=device)
+            tot+=float(nn.functional.cross_entropy(model(x).reshape(-1,len(chars)),y.reshape(-1),reduction="sum"))
+            cnt+=y.numel()
+    val=tot/max(cnt,1)
+    # eixo Dory: tokens gerados ate a distribuicao "decidir" (entropia baixa
+    # sustentada 3 passos). Medido com o MESMO prompt/seed nas duas variantes.
+    seed(seed_v)
+    gen_start = torch.zeros((1,1), dtype=torch.long, device=device)
+    gen_entropies = []
+    with torch.no_grad():
+        h = gen_start
+        for _ in range(128):
+            logits = model(h)[:, -1, :]
+            logp = torch.log_softmax(logits.float(), -1)
+            ent = float(-(logp.exp() * logp).sum())
+            gen_entropies.append(ent)
+            nxt = logits.argmax(-1, keepdim=True)
+            h = torch.cat([h, nxt], dim=1)
+    # F8: entropia media dos logits gerados (eixo Dory/token-efficiency)
+    gen_entropy_mean = round(sum(gen_entropies) / len(gen_entropies), 4)
+    gen_entropy_first10 = round(sum(gen_entropies[:10]) / 10, 4)
+    stop_at = 128
+    for i in range(2, len(gen_entropies)):
+        if max(gen_entropies[i-2:i+1]) < 0.5:
+            stop_at = i + 1
+            break
+    r={"scale_m":scale,"variant":variant,"params":params,"steps":steps,
+       "tokens_until_answer": stop_at,
+       "gen_entropy_first": round(gen_entropies[0], 4),
+       "gen_entropy_last": round(gen_entropies[-1], 4),
+       "gen_entropy_mean": gen_entropy_mean,
+       "gen_entropy_first10": gen_entropy_first10,
+       "val_loss":round(val,4),"val_bpb":round(val/math.log(2),4),
+       "train_seconds":round(train_s,1),"train_tok_s":round(seen/train_s,1),
+       "loss_first":losses[0],"loss_last":losses[-1],
+       "loss_first_50_avg":round(sum(losses[:50])/len(losses[:50]),4),
+       "loss_last_50_avg":round(sum(losses[-50:])/len(losses[-50:]),4)}
+    print("RESULT "+json.dumps(r),flush=True)
+    return r
+
+
+def main():
+    ap=argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--device",default="cuda")
+    ap.add_argument("--seed",type=int,default=42)
+    ap.add_argument("--out",required=True)
+    ap.add_argument("--only",default="",help="filtro scale:variant, ex 10:loop_full,50:plain")
+    a=ap.parse_args()
+    dev=a.device if torch.cuda.is_available() and a.device=="cuda" else "cpu"
+    rows=[]
+    only = set(x for x in a.only.split(",") if x)
+    for scale in (10,50,150,300):
+        for v in ("plain","loop_core","loop_full","frozen_qv","ngpt_only","loop_spec","kv_last","loop_spec_tern", "flt_only", "flt_ngpt", "hla_only", "hla_last"):
+            if only and f"{scale}:{v}" not in only:
+                continue
+            rows.append(run(scale,v,dev,a.seed))
+    out={"paper_refs":["2611.03998 Dory","2610.40325 Meta loop","2402.17764 BitNet"],
+         "same_compute_per_scale":True,"device":dev,"seed":a.seed,"rows":rows}
+    Path(a.out).parent.mkdir(parents=True,exist_ok=True)
+    Path(a.out).write_text(json.dumps(out,indent=2)+"\n")
+    print("REPORT "+a.out,flush=True)
+
+
+if __name__=="__main__":
+    raise SystemExit(main())
