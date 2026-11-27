@@ -74,7 +74,7 @@ STATE_DIR_ENV = "JARVIS_STATE_DIR"
 
 # Formatos com extração suportada (ext → método).
 SUPPORTED = {
-    ".md", ".markdown", ".txt", ".html", ".htm", ".epub", ".pdf",
+    ".md", ".markdown", ".txt", ".vtt", ".srt", ".html", ".htm", ".epub", ".pdf",
     ".json", ".jsonc", ".json5", ".yaml", ".yml", ".toml", ".ini",
     ".xml", ".csv",
 }
@@ -204,7 +204,7 @@ def extract(path: str | Path) -> tuple[str, str, list[str], bool]:
     p = Path(path)
     fmt, _ = detect_format(p)
     notes: list[str] = []
-    if fmt in (".md", ".markdown", ".txt", ".json", ".jsonc", ".json5",
+    if fmt in (".md", ".markdown", ".txt", ".vtt", ".srt", ".json", ".jsonc", ".json5",
                ".yaml", ".yml", ".toml", ".ini", ".xml", ".csv"):
         return _read_text_file(p), "direct-read", notes, False
     if fmt in (".html", ".htm"):

@@ -362,8 +362,8 @@ _ALLOWED_EXTENSIONS: tuple[str, ...] = (
     ".js", ".jsx", ".ts", ".tsx", ".vue", ".svelte", ".astro", ".html", ".css", ".scss",
     ".java", ".kt", ".kts", ".rb", ".php", ".ex", ".exs", ".erl", ".sql",
 
-    # Texto Pleno
-    ".txt",
+    # Texto Pleno (transcricoes de YouTube .vtt/.srt — 123 arquivos em Books)
+    ".txt", ".vtt", ".srt",
 
     # Documentos sanitizados pré-RAG (doc_sanitize: extract→normalize→
     # validate; quarentena em vez de lixo no Qdrant)
