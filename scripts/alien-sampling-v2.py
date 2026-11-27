@@ -7,18 +7,30 @@ pares por coerência -> proxy de disponibilidade -> hipóteses com gate.
 import argparse, itertools, json, re, time
 from pathlib import Path
 
-SEEDS = ("transformer architecture residual attention", "compression entropy coding",
-         "memory cache long context", "quantization low bit", "multimodal vision audio",
-         "scaling exponent depth loop")
+# Seeds dinamicos: temas NOVOS descobertos no RAG/papers (nao os 6 fixos
+# que saturaram em 4 execucoes). Cada seed puxa trechos com proveniencia.
+SEEDS = ("elastic latent recurrence loop index conditioning",
+         "per-token halting KL convergence fixed point",
+         "lossless speculative decoding draft verify",
+         "byte EOT tokenizer data efficiency",
+         "curated educational corpus filtering threshold",
+         "residual normalization massive activations stages")
 COLLS = ("code_index", "books", "jarvis_test_frontier_2026_11")
 TECH = ("residual", "normalization", "attention", "mlp", "loop", "recurrent",
         "depth", "kv", "cache", "context", "compression", "entropy", "arithmetic",
         "quantization", "ternary", "tokenizer", "byte", "multimodal", "vision",
         "prelude", "coda", "scaling", "exponent", "harness", "memory", "latency")
 
+PHRASES = ("elastic latent recurrence", "per-token halting", "fixed point",
+           "lossless speculative", "multi-token", "byte-level", "educational corpus",
+           "residual normalization", "massive activations", "scaling exponent",
+           "loop index", "KV cache")
+
 def atoms(text):
     low = text.lower()
-    return sorted(t for t in TECH if re.search(r"\b" + re.escape(t) + r"\w*", low))
+    out = [t for t in TECH if re.search(r"\b" + re.escape(t) + r"\w*", low)]
+    out += [ph for ph in PHRASES if ph in low]
+    return sorted(set(out))
 
 def main():
     ap = argparse.ArgumentParser()
