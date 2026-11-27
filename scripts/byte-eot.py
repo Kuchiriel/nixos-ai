@@ -27,16 +27,17 @@ def main():
     tok = GPT2TokenizerFast.from_pretrained(str(TOKDIR), local_files_only=True)
     text = Path(a.src).read_text(errors="ignore")[:a.limit]
     ids = tok.encode(text)
+    from array import array
     chunks, total = [], 0
     for i in range(0, len(ids), 2000):
-        out = bytearray()
+        out = array("I")
         for tid in ids[i:i+2000]:
             out.extend(tok.decode([tid]).encode("utf-8"))
             out.append(EOT)
-        arr = np.frombuffer(bytes(out), dtype=np.uint8).astype(np.int32)
+        arr = np.frombuffer(out, dtype=np.uint32).astype(np.int32)
         chunks.append(arr); total += len(arr)
     result = np.concatenate(chunks)
-    Path(a.out).write_bytes(result.tobytes())
+    np.save(a.out, result)
     stats = {"n": int(total), "vocab": 257, "eot_id": EOT,
              "eot_count": int((result == EOT).sum()),
              "source": a.src, "tokenizer": str(TOKDIR),
