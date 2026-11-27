@@ -875,14 +875,22 @@ async function handler(req, res) {
     const n = Math.min(120, Math.max(10, parseInt(url.searchParams.get('n') || '60', 10)));
     try {
       const { execFileSync } = await import('node:child_process');
+      // A GPU e do projeto e pode estar ocupada por um treino: gerar em CPU
+      // (18s medidos para 80 tokens) evita OOM e undefined no playground.
+      const gcc = execFileSync('bash', ['-lc',
+        'ls -dt /nix/store/*-gcc-*-lib/lib 2>/dev/null | head -1'],
+        { encoding: 'utf8' }).trim();
       const out = execFileSync('/home/nixos/.venvs/finetune/bin/python', [
         HOME + '/projects/nixos-ai/scripts/f33-generate.py', prompt, String(n),
-      ], { encoding: 'utf8', timeout: 60000,
-           env: { ...process.env,
-                  LD_LIBRARY_PATH: '/run/opengl-driver/lib:/run/current-system/sw/share/nix-ld/lib',
+      ], { encoding: 'utf8', timeout: 120000,
+           env: { ...process.env, CUDA_VISIBLE_DEVICES: '',
+                  LD_LIBRARY_PATH: gcc + ':/run/opengl-driver/lib:/run/current-system/sw/share/nix-ld/lib',
                   TRITON_LIBCUDA_PATH: '/run/opengl-driver/lib' } });
       return send(200, out.trim());
-    } catch (e) { return send(500, JSON.stringify({error: String(e).slice(0,200)})); }
+    } catch (e) {
+      return send(500, JSON.stringify({error: String(e).slice(0,240),
+        hint: 'geracao em CPU; se ainda falhar, ver /home/nixos/work/hybrid/f33-generate.log'}));
+    }
   }
   // F30: dashboard do laboratorio do LLM do zero (servido pelo proprio hub)
   if (req.method === 'GET' && (url.pathname === '/lab' || url.pathname === '/lab/')) {
