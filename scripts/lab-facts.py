@@ -46,9 +46,10 @@ gates = [
   "threshold": "val<=2.05 em 19.660.800 tokens vistos E custo de logits<=1/5 do baseline",
   "baseline": 1.9762, "variant": "byte+EOT 257 simbolos, parametros de camada pareados",
   "source": "idle-wait-work-byte-eot-2026-11-27.md"},
- {"id": "F106-weight-entropy", "status": "aprovado_parcial", "value": 21.9839,
-  "threshold": "<=24 bits/peso e 2/3 grupos", "source": "weight-entropy-f75.json",
-  "caveat": "custo de decode ANS ainda nao medido"},
+ {"id": "F106-weight-entropy", "status": "rejeitado", "value": 21.9839,
+  "threshold": "<=24 bits/peso e 2/3 grupos + decode<=10% do tempo/token",
+  "source": "f107-ans-decode-cost-resultado-2026-11-27.md",
+  "caveat": "entropia passa, custo de decode falha (343.8% do tempo/token no proxy zstd)"},
 ]
 
 out = {

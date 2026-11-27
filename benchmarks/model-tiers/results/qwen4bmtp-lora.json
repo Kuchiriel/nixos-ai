@@ -2,11 +2,11 @@
  "tag": "qwen4bmtp-lora",
  "model": "jarvis-mtp-lora",
  "endpoint": "http://127.0.0.1:8092",
- "ts": "2026-11-15 04:00",
+ "ts": "2026-11-22 04:01",
  "speed": {
   "ttft_s": 0.116,
-  "prefill_ts": 63.9,
-  "gen_ts": 64.0
+  "prefill_ts": 64.7,
+  "gen_ts": 63.7
  },
  "ptbr": {
   "dificeis": {

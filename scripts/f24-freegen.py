@@ -34,6 +34,7 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--prompts", type=int, default=50)
     ap.add_argument("--gen-tokens", type=int, default=256)
+    ap.add_argument("--variant", default="loop_spec")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
@@ -45,7 +46,7 @@ def main():
     n = int(len(text) * 0.9)
     chars = sorted(set(text)); stoi = {c: i for i, c in enumerate(chars)}
     ids = [stoi[c] for c in text[:n]]; vids = [stoi[c] for c in text[n:]]
-    model = ScaleLM(len(chars), a.depth, "loop_spec").to(a.device)
+    model = ScaleLM(len(chars), a.depth, a.variant).to(a.device)
     opt = torch.optim.Adafactor(model.parameters(), lr=3e-4,
                                 beta2_decay=-0.8, eps=(None, 0.001))
     model.train()
@@ -64,7 +65,8 @@ def main():
               for _ in range(a.prompts)]
     rows = []
     with torch.no_grad():
-        for mode in ("full", "per_loop", "last"):
+        modes = ("full", "per_loop", "last") if a.variant in ("loop_spec", "hla_last") else ("full", "per_loop")
+        for mode in modes:
             confs, corrs, ents = [], [], []
             peak = 0; t0 = time.perf_counter()
             for k in starts:
@@ -115,6 +117,10 @@ def main():
                          "raw_corr": [int(c) for c in corrs]})
     r = {"seed": a.seed, "depth": a.depth, "prompts": a.prompts,
          "teacher_forcing": False, "rows": rows}
+    kv_per_token = 4 * 2 * a.depth * 2  # 4 blocos x K,V x d x bf16
+    latent_per_token = 4 * 256 * 2 if a.variant.startswith("hla") else 0
+    r["kv_bytes_per_token"] = kv_per_token
+    r["latent_bytes_per_token"] = latent_per_token
     Path(a.out).write_text(json.dumps(r, indent=2) + "\n")
     print("RESULT " + json.dumps({k: v for k, v in r.items() if k != "rows"}), flush=True)
 

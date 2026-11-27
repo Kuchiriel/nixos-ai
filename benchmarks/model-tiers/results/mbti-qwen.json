@@ -3,19 +3,19 @@
 "runs": [
 {
 "cond": "none",
-"out": "YES\nThe single failure is isolated to species counting, a metric rather than a core functionality break.\nDeploying tonight mitigates this risk by allowing immediate investigation and hotfixing before the next release cycle."
+"out": "YES\nOne species count failure indicates a non-critical data mismatch rather than a functional regression.\nDeploying tonight allows rapid patching of this isolated issue without blocking a full feature set."
 },
 {
 "cond": "none",
-"out": "NO\nThe single failure in species count indicates a potential regression in data integrity or incorrect species enumeration.\nProceeding to release with an unknown bug could lead to downstream data corruption or incorrect biological conclusions.\nWait for the maintainers to investigate and fix the root cause before the next release."
+"out": "NO\nThe single test failure indicates potential instability in the species counting logic, which could lead to incorrect data in production.\nReleasing immediately risks propagating a bug without adequate investigation or a hotfix patch."
 },
 {
 "cond": "INTP",
-"out": "YES\nThe single failure in species count is likely a benign data inconsistency rather than a critical logic error.\nReleasing now allows us to gather real-world usage data before scheduling a targeted fix to resolve the species discrepancy."
+"out": "YES\nThe single failure is likely an edge case in species counting that won't affect core functionality.\nDeploying now allows immediate bug fixes while minimizing risk compared to waiting for a full retest."
 },
 {
 "cond": "INTP",
-"out": "YES\nThe single species count failure likely represents an edge case or known anomaly rather than a critical regression.\nReleasing tonight provides valuable feedback loops while allowing time to investigate the specific data discrepancy."
+"out": "YES\nThe single failure in species count is likely a benign data artifact rather than a critical logic bug.\nGiven the high pass rate (408/409), the risk of blocking a release is outweighed by the need for timely delivery."
 }
 ]
 }

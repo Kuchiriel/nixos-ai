@@ -73,6 +73,22 @@ class Attn(nn.Module):
             y = x + out
         return (y, new_cache) if cache is not None else y
 
+    def ai_step(self, h, u):
+        """Cross-attention parameter-free: Q=h, K=V=u (Attention Injection)."""
+        b, t, d = h.shape
+        q = (h @ self.q if not isinstance(self.q, nn.Module) else self.q(h))
+        k = u @ self.k if not isinstance(self.k, nn.Module) else self.k(u)
+        v = u @ self.v if not isinstance(self.v, nn.Module) else self.v(u)
+        q = q.view(b, t, self.h, self.dh).transpose(1, 2)
+        k = k.view(b, t, self.h, self.dh).transpose(1, 2)
+        v = v.view(b, t, self.h, self.dh).transpose(1, 2)
+        scale = math.sqrt(self.dh * self.h)
+        a = torch.softmax(q @ k.transpose(-2, -1) / scale, -1)
+        o = (a @ v).transpose(1, 2).contiguous().view(b, t, d) @ self.o
+        return nn.functional.normalize(h + o, dim=-1) if self.scale_in else h + o
+
+
+
 
 class Block(nn.Module):
     def __init__(self, d, heads, scale_in=False):
@@ -120,12 +136,49 @@ class SpecLinear(nn.Module):
         return x @ self.base + (x @ self.A.T) @ self.B.T
 
 
+class TernarySpecLinear(nn.Module):
+    """W^(l) = W + ternarizado(A,B) — BitNet b1.58 nos adapters por loop.
+
+    Ternarizacao com straight-through: frente usa sinal(-1/0/+1), gradiente
+    volta como se fosse identidade (estimador de Rumelhart/Hinton).
+    """
+    def __init__(self, w: nn.Parameter, r=8, alpha=2.0):
+        super().__init__()
+        self.register_buffer("base", w.detach().clone())
+        self.A = nn.Parameter(torch.randn(r, w.shape[0]) * 0.01)
+        self.B = nn.Parameter(torch.zeros(w.shape[1], r))
+        self.alpha = alpha
+
+    @staticmethod
+    def tern(x):
+        # escala: media de |x| por tensor, como BitNet
+        scale = x.abs().mean().clamp_min(1e-8)
+        q = torch.clamp(torch.round(x / scale), -1, 1)
+        return (q + (x / scale - q).detach()) * scale  # STE
+
+    def forward(self, x):
+        dW = self.tern(self.A.T @ self.B.T) * self.alpha
+        return x @ self.base + x @ dW
+
+
+class LatentCompress(nn.Module):
+    """HLA (2610.07940): residual -> latente r<<d; query le direto."""
+    def __init__(self, d, r=256):
+        super().__init__()
+        self.down = nn.Linear(d, r, bias=False)
+        self.up = nn.Linear(r, d, bias=False)
+
+    def forward(self, x):
+        return x + self.up(self.down(x))
+
+
 class ScaleLM(nn.Module):
     """input(2) + recurrent(4) + output(2) blocos; variantes ligam u+L2 e/ou LoRA."""
     def __init__(self, vocab, d, variant):
         super().__init__()
         self.d, self.variant = d, variant
-        self.scale_in = variant in ("loop_full", "ngpt_only", "loop_spec", "kv_last")
+        self.scale_in = variant in ("loop_full", "ngpt_only", "loop_spec", "kv_last", "loop_spec_tern", "flt_ngpt", "hla_only", "hla_last")
+        self.variant_flt = variant in ("flt_only", "flt_ngpt")
         self.tok = nn.Embedding(vocab, d)
         self.pos = nn.Embedding(512, d)  # F24: 64 ctx + 256 gerados = 320 > 256
         n_in, n_rec, n_out = 2, 4, 2
@@ -136,11 +189,15 @@ class ScaleLM(nn.Module):
         self.blocks = nn.ModuleList([Block(d, heads, self.scale_in) for _ in range(n_in+n_rec+n_out)])
         self.ln = nn.LayerNorm(d)
         self.head = nn.Linear(d, vocab)
+        if variant in ("hla_only", "hla_last"):
+            # comprimir o residual antes de cada bloco do loop
+            self.hla = nn.ModuleList([LatentCompress(d, 256)
+                                      for _ in range(n_rec)])
         if variant == "kv_last":
             # Dory 2611.03998 sec 6.1: cache do ULTIMO loop sobrescreve os
             # anteriores -> KV mem tem tamanho de 1 loop, nao 4.
             self.kv_last = True
-        if variant in ("loop_spec", "kv_last"):
+        if variant in ("loop_spec", "kv_last", "loop_spec_tern", "flt_only", "flt_ngpt", "hla_only", "hla_last"):
             # Meta 2610.40325 sec 2.2: W^(l) = W + DeltaW^(l), com adapters
             # LOOP-ESPECIFICOS (cada passo do bloco recorrente tem os seus).
             for bi in range(n_in, n_in + n_rec):
@@ -152,7 +209,8 @@ class ScaleLM(nn.Module):
                         r = 8
                         # registrar como atributos do MODULO: dict Python
                         # comum NAO registra Parameter -> .to(device) nao move
-                        mod = SpecLinear(W, r)
+                        mod = (TernarySpecLinear(W, r)
+                               if variant == "loop_spec_tern" else SpecLinear(W, r))
                         setattr(blk.att, f"_spec_{attr}_{l}", mod)
                         blk.att._spec_adapters[(attr, l)] = mod
         if variant == "ngpt_only":
@@ -178,7 +236,14 @@ class ScaleLM(nn.Module):
                 u = h.detach().clone()  # Dory: representacao fixa de entrada
                 for l in range(4):  # total 4 passes do bloco recorrente
                     h = nn.functional.normalize(h + u, dim=-1)  # reinjecao + L2
-                    if self.variant in ("loop_spec", "kv_last"):
+                    if self.variant in ("hla_only", "hla_last"):
+                        h = self.hla[l](h)
+                    if self.variant_flt and l > 0:
+                        # F29: Attention Injection (paper 2605.18797) —
+                        # Q = estado recorrente, K/V = entrada injetada u.
+                        # Reutiliza WQ/WK/WV, sem parametros novos.
+                        h = blk.att.ai_step(h, u)
+                    if self.variant in ("loop_spec", "kv_last", "loop_spec_tern", "flt_only", "flt_ngpt", "hla_only", "hla_last"):
                         att = blk.att
                         saved = {}
                         for attr in ("q", "v"):
@@ -354,7 +419,7 @@ def main():
     rows=[]
     only = set(x for x in a.only.split(",") if x)
     for scale in (10,50,150,300):
-        for v in ("plain","loop_core","loop_full","frozen_qv","ngpt_only","loop_spec","kv_last"):
+        for v in ("plain","loop_core","loop_full","frozen_qv","ngpt_only","loop_spec","kv_last","loop_spec_tern", "flt_only", "flt_ngpt", "hla_only", "hla_last"):
             if only and f"{scale}:{v}" not in only:
                 continue
             rows.append(run(scale,v,dev,a.seed))

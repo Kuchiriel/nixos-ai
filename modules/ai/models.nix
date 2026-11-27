@@ -263,21 +263,14 @@ in rec {
     sha256 = "sha256-u+9Yw3zoiCC+nZi2Q38c9LrIkMlHvVX8e2jiIJhXQjE=";
   };
 
+  # Qwen3.8-4B Heretic-Abliterated (distilado de Qwen3.8 2.4T A95B) — 24/11.
+  # MTP + visao; benchmarks publicados do destilado: MMLU CoT 0.354 -> 0.553
+  # (+19.9pp) vs Qwen3.5-4B base; GSM8K 0.850 -> 0.785 (-6.5pp).
+  # Local: tok/s empatado com o 3.5-4B (55.70 vs 55.23) e 4/4 prompts
+  # conceituais respondidos sem recusa. Substitui llm-uncensored-4b.
   llm-uncensored-4b = mkModel {
-    # Qwen3.5-4B Q4_K_M.gguf · 2.6GB em ~/models (hash do arquivo local).
-    # Server: upstream stock -ngl 99 (GPU-full, exclusivo via Conflicts)
-    # porta 8092. Ver directServers abaixo.
-    # AVISO — ABLITERATED ("Uncensored ... Aggressive"): a refusal direction
-    # foi removida no fine-tune. Consequencias (medidas 07/11):
-    #   - NAO serve como ALVO de jailbreak: nao recusa (18/18 prompts, ate
-    #     os mais overt), entao qualquer ASR medido nele e ruido;
-    #   - NAO serve para medir refusal direction: nao ha recusa para ter
-    #     assinatura no espaco de ativacao;
-    #   - NAO serve como judge de recusa (sempre "complied").
-    # Para medir recusa/refusal direction use um modelo ALINHADO (o
-    # Ternary-Bonsai-8B do prism, ou um da API).
-    url = "https://huggingface.co/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
-    sha256 = "sha256-eeKOys+E51tgVs9AWWNtQ1qp62d5V4D3t9vH0yqWJ0E=";
+    url = "https://huggingface.co/yachen4ever/Qwen3.8-4B-Distill-Heretic-Abliterated-GGUF/resolve/main/model-Q4_K_M.gguf";
+    sha256 = "sha256-e5WEfOFoT5jZbxO60tqu/8/S+V6i/zgh7miUNZChAVk=";
   };
 
   llm-uncensored-4b-mtp = mkModel {

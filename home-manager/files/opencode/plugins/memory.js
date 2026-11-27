@@ -275,6 +275,60 @@ const applyBashGuard = (tool, args) => {
   if (replacement) args.command = replacement;
 };
 
+function summaryIsDegenerate(text) {
+  const s = String(text || "").trim();
+  if (s.length < 600) return true;
+  // (15/11) resumo "bem formado" que confessa nao ter lido nada tambem e
+  // degenerado: foi o que aconteceu as 14:46 (992 chars de "Nao registrado"
+  // porque o transcript chegou vazio ao modelo).
+  if (/n[ãa]o registrado|transcript (cont[eé]m|est[aá])? ?vazi|sem conte[úu]do de mensagens/i.test(s.slice(0, 600))) return true;
+  const secoes = [
+    "Objective", "Requirements", "Decisions", "Completed",
+    "Active", "Blockers", "Next Move", "Files",
+  ];
+  // quantas secoes tem corpo de verdade (>= 15 chars ate o proximo "## ")
+  let vazias = 0;
+  for (const h of secoes) {
+    const i = s.indexOf("## " + h);
+    if (i < 0) { vazias += 1; continue; }
+    const resto = s.slice(i + h.length + 3);
+    const next = resto.search(/\n## /);
+    const bloco = (next >= 0 ? resto.slice(0, next) : resto).trim();
+    if (bloco.length < 15) vazias += 1;
+  }
+  if (vazias >= 5) return true;
+  // e o texto fora dos cabecalhos precisa ter substancia
+  let corpo = s;
+  for (const h of secoes) corpo = corpo.split("## " + h).join("");
+  corpo = corpo.replace(/[#\s*\-]/g, "");
+  return corpo.length < 400;
+}
+
+function fallbackSummary(messages) {
+  const lines = [];
+  try {
+    for (const m of messages || []) {
+      const role = m?.role || m?.type || m?.info?.role || "msg";
+      const text = extractText(m);
+      if (!text) continue;
+      lines.push(`- [${role}] ${text.slice(0, 300)}`);
+    }
+  } catch {}
+  const head = lines.slice(-40).join("\n");
+  return [
+    "## Objective",
+    "Continuar o trabalho da frota (TAB / Termux). O resumo abaixo e automatico",
+    "e preserva o essencial do transcript; a memoria da frota esta em ~/ai-mesh/memory/episodic.",
+    "",
+    "## Transcript (tail)",
+    head || "- (sem texto extraivel do transcript)",
+    "",
+    "## Next Move",
+    "- Ler SESSION STATE (injetado) antes de agir.",
+    "- Consultar ~/ai-mesh/memory/episodic/*.jsonl e o bus antes de rediagnosticar.",
+  ].join("\n");
+}
+
 export default {
   id: "memory",
   // opencode v2: registers hooks on the tool and session domains.
@@ -321,6 +375,19 @@ export default {
     });
 
     await ctx.session.hook("compaction", (event) => {
+      // (19/11) guard anti-compactacao degenerada: 27/259 resumos <300 chars
+      // medidos no host. Marca o estado reinjetado quando o resumo e' ruim.
+      try {
+        const sum = String(event?.summary?.text || event?.summary || "");
+        if (summaryIsDegenerate(sum)) {
+          const fb = fallbackSummary(event?.messages || []);
+          if (Array.isArray(event.system)) {
+            event.system.push({ type: "text",
+              text: "## AVISO: compactacao DEGENERADA detectada. Nao confie no resumo; releia o estado.\n"
+                  + String(fb).slice(0, 1200) });
+          }
+        }
+      } catch {}
       if (Array.isArray(event.system)) {
         event.system.push({ type: "text", text: COMPACTION_MEMORY });
         const state = stateBlock(event.sessionID, true);

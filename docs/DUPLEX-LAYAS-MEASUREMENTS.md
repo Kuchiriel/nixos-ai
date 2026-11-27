@@ -616,3 +616,9 @@ Próximos passos: convert -> :8093 bench -> decide promotion.
 ## 2026-11-15 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-15T050104.json
 
 ## 2026-11-15T050013 — duplex-cycle completo: conveyor=8/8 reg=nenhum — reports/duplex-cycle/2026-11-15T050013/SUMMARY.md
+
+## 2026-11-22 05:00 duplex-sweep (7d): spk_unidentified=24, tts_mid_barge=0 — reports/duplex-sweep/2026-11-22T050011.json
+
+## 2026-11-22 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-22T050057.json
+
+## 2026-11-22T050006 — duplex-cycle completo: conveyor=8/8 reg=nenhum — reports/duplex-cycle/2026-11-22T050006/SUMMARY.md
