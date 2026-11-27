@@ -6,7 +6,7 @@ import json, sys
 import torch, runpy
 from transformers import GPT2TokenizerFast
 
-CKPT = Path("/home/nixos/work/hybrid/checkpoints/f50-150m-60k-s42-best.pt")
+CKPT = Path("/home/nixos/work/hybrid/checkpoints/f52-150m-68k-s42-best.pt")
 prompt = sys.argv[1] if len(sys.argv) > 1 else "Once upon a time"
 n = int(sys.argv[2]) if len(sys.argv) > 2 else 60
 dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -14,7 +14,7 @@ ck = torch.load(CKPT, map_location=dev, weights_only=False)
 tk = ck.get("tokenizer") or "/home/nixos/work/hybrid/gpt2-local"
 tok = GPT2TokenizerFast.from_pretrained(tk, local_files_only=True)
 cpath = str(ck.get("corpus", "")) + " " + CKPT.name
-if CKPT.name.startswith(("f42-", "f43-", "f44-", "f44b-", "f47-", "f49-", "f50-")) or "full" in cpath:
+if CKPT.name.startswith(("f42-", "f43-", "f44-", "f44b-", "f47-", "f49-", "f50-", "f52-")) or "full" in cpath:
     st = json.load(open("/home/nixos/Books/corpora/tinystories-full-ids-stats.json"))
     remap = {int(k): int(v) for k, v in st["remap"].items()}
 elif "200mb" in cpath or "ids.pt" in cpath:
@@ -40,4 +40,4 @@ with torch.no_grad():
         out.append(nxt)
         h = torch.cat([h, torch.tensor([[nxt]], device=dev)], dim=1)
 print(json.dumps({"prompt": prompt, "generated": tok.decode([rev.get(i, 0) for i in out]),
-                  "tokens": n, "model": "f50-150m-60k-best"}))
+                  "tokens": n, "model": "f52-150m-68k-best"}))
