@@ -64,20 +64,25 @@ def main() -> int:
     correct = 0
     validation_limit = min(args.val_tokens, val_count - args.seq - 1)
     with torch.no_grad():
-        # Mirror f32-wordlevel.py exactly: contiguous windows from offset 0,
-        # grouped in batches of seq*batch. The previous implementation reused
-        # the same offsets inside every group, which over-counted tokens.
-        starts = np.arange(0, validation_limit, args.seq, dtype=np.int64)
-        for group in range(0, len(starts), args.batch):
-            offsets = starts[group:group + args.batch]
+        # Mirror f32-wordlevel.py exactly, including the trailing group that
+        # runs past --val-tokens (f32 evaluates up to 200704 tokens for the
+        # default 200000 window). Reproducing the exact window set is what
+        # makes the evaluator comparable with the published JSON.
+        for k in range(0, validation_limit, args.seq * args.batch):
+            offsets = np.arange(
+                0,
+                args.seq * args.batch,
+                args.seq,
+                dtype=np.int64,
+            )
             if len(offsets) < 2:
                 break
             x_numpy = np.stack(
-                [np.asarray(tokens[train_count + j:train_count + j + args.seq])
+                [np.asarray(tokens[train_count + k + j:train_count + k + j + args.seq])
                  for j in offsets]
             )
             y_numpy = np.stack(
-                [np.asarray(tokens[train_count + j + 1:train_count + j + 1 + args.seq])
+                [np.asarray(tokens[train_count + k + j + 1:train_count + k + j + 1 + args.seq])
                  for j in offsets]
             )
             x = torch.from_numpy(x_numpy.astype(np.int64, copy=False)).to(args.device)

@@ -26,8 +26,13 @@ class F51CheckpointEvalTests(unittest.TestCase):
 
     def test_evaluator_uses_contiguous_non_overlapping_windows_like_f32(self):
         source = EVALUATOR.read_text(encoding="utf-8")
-        self.assertIn("starts = np.arange(0, validation_limit, args.seq, dtype=np.int64)", source)
-        self.assertIn("offsets = starts[group:group + args.batch]", source)
+        self.assertIn(
+            "for k in range(0, validation_limit, args.seq * args.batch):",
+            source,
+        )
+        self.assertIn("args.seq * args.batch,\n                args.seq,", source)
+        self.assertIn("train_count + k + j", source)
+        self.assertNotIn("starts = np.arange(0, validation_limit", source)
         self.assertNotIn("np.arange(\n                offset,", source)
 
     def test_runner_waits_for_f50_and_uses_global_gpu_lock(self):
