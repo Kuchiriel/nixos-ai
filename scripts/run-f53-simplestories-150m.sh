@@ -43,9 +43,9 @@ if [ ! -s "$CORPUS" ] || [ ! -s "$STATS" ]; then
   if [ -s "$CORPUS" ] && [ -s "$SAMPLE_TEXT" ]; then
     # The canonical 200MB sample already exists; derive only the top-k remap
     # stats required by f32 --npy instead of rebuilding the corpus.
-    "$PYTHON" -u "$REPO_ROOT/scripts/f53-simplestories-tokenize.py" \
-      --parquet "$PARQUET" --text "$SAMPLE_TEXT" --out "$CORPUS" \
-      --stats "$STATS" --derive-stats-only --vocab 10000 --seed 42 \
+    "$PYTHON" -u "$REPO_ROOT/scripts/f53-derive-stats.py" \
+      --text "$SAMPLE_TEXT" --npy "$CORPUS" --stats "$STATS" \
+      --vocab 10000 --seed 42 \
       > "$OUT_DIR/f53-simplestories-stats.log" 2>&1
   else
     "$PYTHON" -u "$REPO_ROOT/scripts/f53-simplestories-tokenize.py" \

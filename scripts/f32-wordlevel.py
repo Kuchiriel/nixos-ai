@@ -9,6 +9,7 @@ exposure bias medido em F26. Mede val loss/perplexidade e acc.
 from __future__ import annotations
 import argparse, json, math, random, time
 from collections import Counter
+from contextlib import nullcontext
 from pathlib import Path
 import torch
 import torch.nn.functional as F
@@ -110,7 +111,11 @@ def main():
                     pref = torch.cat([pref, nxt], dim=1)
                 # usar os tokens GERADOS (pref[:,32:]), nao o prefixo original
                 x = torch.cat([x[:, :32], pref[:, 32:], x[:, 64:]], dim=1)
-        with torch.autocast(device_type=a.device, dtype=torch.bfloat16) if a.device=="cuda" else torch.autocast(enabled=False):
+        # CPU fallback: the installed torch API requires device_type for
+        # autocast, so the CPU branch uses a plain no-op context instead.
+        autocast_ctx = (torch.autocast(device_type=a.device, dtype=torch.bfloat16)
+                       if a.device == "cuda" else nullcontext())
+        with autocast_ctx:
             lg = model(x, causal=True).reshape(-1, vocab).float()
             loss = F.cross_entropy(lg, y.reshape(-1))
         if step <= a.warmup:

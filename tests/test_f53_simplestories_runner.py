@@ -4,6 +4,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TOKENIZER = ROOT / "scripts" / "f53-simplestories-tokenize.py"
+DERIVER = ROOT / "scripts" / "f53-derive-stats.py"
 RUNNER = ROOT / "scripts" / "run-f53-simplestories-150m.sh"
 
 
@@ -31,12 +32,22 @@ class F53SimpleStoriesTests(unittest.TestCase):
         self.assertIn("np.load(output, mmap_mode=\"r\")", source)
         self.assertIn('"derived_from": str(text_path)', source)
 
+    def test_deriver_reuses_existing_corpus_and_bounds_memory(self):
+        source = DERIVER.read_text(encoding="utf-8")
+        self.assertIn('np.load(npy_path, mmap_mode="r")', source)
+        self.assertIn("for offset in range(0, len(text), args.chunk_size)", source)
+        self.assertIn("counts.update(tokenizer.encode(text[offset:offset + args.chunk_size]))", source)
+        self.assertIn("max_id", source)
+        self.assertIn("if max_id >= vocab:", source)
+        self.assertIn('"remap": {str(token): index for token, index in remap.items()}', source)
+
     def test_runner_reuses_canonical_sample_and_derives_only_stats(self):
         source = RUNNER.read_text(encoding="utf-8")
         self.assertIn("sample200mb-ids.npy", source)
         self.assertIn("sample200mb.txt", source)
         self.assertIn("sample200mb-ids-stats.json", source)
-        self.assertIn("--derive-stats-only", source)
+        self.assertIn("f53-derive-stats.py", source)
+        self.assertIn("--text \"$SAMPLE_TEXT\" --npy \"$CORPUS\" --stats \"$STATS\"", source)
 
     def test_runner_waits_for_f50_and_uses_global_gpu_lock(self):
         source = RUNNER.read_text(encoding="utf-8")
