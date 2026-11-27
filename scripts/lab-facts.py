@@ -38,8 +38,14 @@ gates = [
   "threshold": "<=1.5999", "source": "f79-watch-result.json"},
  {"id": "F69-compressao-dedup8", "status": "rejeitado",
   "value": 2.7304, "threshold": "<1.95", "source": "f72-gate-dedup8 doc"},
+ {"id": "F96-KV-nao-binding", "status": "rejeitado", "value": 4.95,
+  "threshold": ">=25% da VRAM", "source": "f96-kv-baseline-2026-11-27.md"},
  {"id": "F91-ablacao-beta", "status": "pendente",
   "value": None, "threshold": "3/3 tamanhos, Delta>=0.01 nat", "source": "f91 doc"},
+ {"id": "F102-byte-EOT", "status": "pendente", "value": None,
+  "threshold": "val<=2.05 em 19.660.800 tokens vistos E custo de logits<=1/5 do baseline",
+  "baseline": 1.9762, "variant": "byte+EOT 257 simbolos, parametros de camada pareados",
+  "source": "idle-wait-work-byte-eot-2026-11-27.md"},
 ]
 
 out = {
