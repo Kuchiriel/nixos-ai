@@ -38,8 +38,11 @@ def diversity_strata(row: dict) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--parquet", required=True)
+    parser.add_argument("--text", default="", help="existing sampled text to reuse")
     parser.add_argument("--out", required=True)
     parser.add_argument("--stats", required=True)
+    parser.add_argument("--derive-stats-only", action="store_true",
+                        help="reuse an existing text/npy pair and only derive top-k remap stats")
     parser.add_argument("--target-bytes", type=int, default=200_000_000)
     parser.add_argument("--vocab", type=int, default=10_000)
     parser.add_argument("--batch-size", type=int, default=2_000)
@@ -47,8 +50,49 @@ def main() -> int:
     args = parser.parse_args()
 
     started = time.perf_counter()
-    parquet = pq.ParquetFile(args.parquet)
     tokenizer = GPT2TokenizerFast.from_pretrained(str(TOKDIR), local_files_only=True)
+    output = Path(args.out)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    if args.derive_stats_only:
+        if not args.text:
+            raise ValueError("--derive-stats-only requires --text")
+        text_path = Path(args.text)
+        if not text_path.is_file():
+            raise FileNotFoundError(f"missing sampled text: {text_path}")
+        if not output.is_file():
+            raise FileNotFoundError(f"missing sampled npy: {output}")
+        text = text_path.read_text(errors="ignore")
+        chunk_size = 8_000_000
+        counts: Counter[int] = Counter()
+        for offset in range(0, len(text), chunk_size):
+            counts.update(tokenizer.encode(text[offset:offset + chunk_size]))
+        top = [token for token, _ in counts.most_common(args.vocab)]
+        remap = {token: index for index, token in enumerate(top)}
+        mapped = np.load(output, mmap_mode="r")
+        stats = {
+            "n": int(mapped.shape[0]),
+            "vocab": int(len(remap)),
+            "remap": {str(token): index for token, index in remap.items()},
+            "source": str(args.parquet),
+            "source_bytes": len(text.encode("utf-8")),
+            "derived_from": str(text_path),
+            "seed": args.seed,
+            "strata": None,
+            "seconds": round(time.perf_counter() - started, 1),
+        }
+        Path(args.stats).write_text(json.dumps(stats, indent=2) + "\n", encoding="utf-8")
+        print("RESULT " + json.dumps({
+            "out": str(output),
+            "tokens": stats["n"],
+            "vocab": stats["vocab"],
+            "source_bytes": stats["source_bytes"],
+            "derived_from": str(text_path),
+            "seconds": stats["seconds"],
+        }), flush=True)
+        return 0
+
+    parquet = pq.ParquetFile(args.parquet)
     columns = ["generation_id", "story", "theme", "topic", "style", "feature"]
     selected_texts: list[str] = []
     selected_bytes = 0
@@ -95,8 +139,6 @@ def main() -> int:
     remap = {token: index for index, token in enumerate(top)}
     mapped = np.asarray([remap.get(token, 0) for token in encoded], dtype=np.int32)
 
-    output = Path(args.out)
-    output.parent.mkdir(parents=True, exist_ok=True)
     np.save(output, mapped, allow_pickle=False)
     stats = {
         "n": int(mapped.shape[0]),

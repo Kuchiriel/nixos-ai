@@ -24,6 +24,20 @@ class F53SimpleStoriesTests(unittest.TestCase):
         self.assertIn('"remap": {str(token): index for token, index in remap.items()}', source)
         self.assertIn('"n": int(mapped.shape[0])', source)
 
+    def test_tokenizer_can_derive_stats_without_resampling(self):
+        source = TOKENIZER.read_text(encoding="utf-8")
+        self.assertIn("if args.derive_stats_only:", source)
+        self.assertIn("text_path.read_text(errors=\"ignore\")", source)
+        self.assertIn("np.load(output, mmap_mode=\"r\")", source)
+        self.assertIn('"derived_from": str(text_path)', source)
+
+    def test_runner_reuses_canonical_sample_and_derives_only_stats(self):
+        source = RUNNER.read_text(encoding="utf-8")
+        self.assertIn("sample200mb-ids.npy", source)
+        self.assertIn("sample200mb.txt", source)
+        self.assertIn("sample200mb-ids-stats.json", source)
+        self.assertIn("--derive-stats-only", source)
+
     def test_runner_waits_for_f50_and_uses_global_gpu_lock(self):
         source = RUNNER.read_text(encoding="utf-8")
         self.assertIn("jarvis-f50-150m-60k", source)

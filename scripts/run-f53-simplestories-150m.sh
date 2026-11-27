@@ -7,8 +7,9 @@ OUT_DIR=${OUT_DIR:-$HOME/work/hybrid}
 PYTHON=${PYTHON:-/home/nixos/.venvs/finetune/bin/python}
 CORPUS_DIR=${CORPUS_DIR:-$HOME/Books/corpora/SimpleStories}
 PARQUET=${PARQUET:-$CORPUS_DIR/processed.parquet}
-CORPUS=${CORPUS:-$HOME/Books/corpora/simplestories-200mb-ids.npy}
-STATS=${STATS:-$HOME/Books/corpora/simplestories-200mb-ids-stats.json}
+CORPUS=${CORPUS:-$CORPUS_DIR/sample200mb-ids.npy}
+SAMPLE_TEXT=${SAMPLE_TEXT:-$CORPUS_DIR/sample200mb.txt}
+STATS=${STATS:-$CORPUS_DIR/sample200mb-ids-stats.json}
 SEEDS=${SEEDS:-"42 43"}
 STEPS=${STEPS:-9600}
 DEPTH=${DEPTH:-1216}
@@ -39,10 +40,19 @@ while nvidia-smi --query-compute-apps=pid,process_name --format=csv,noheader,nou
 done
 
 if [ ! -s "$CORPUS" ] || [ ! -s "$STATS" ]; then
-  "$PYTHON" -u "$REPO_ROOT/scripts/f53-simplestories-tokenize.py" \
-    --parquet "$PARQUET" --out "$CORPUS" --stats "$STATS" \
-    --target-bytes 200000000 --vocab 10000 --seed 42 \
-    > "$OUT_DIR/f53-simplestories-tokenize.log" 2>&1
+  if [ -s "$CORPUS" ] && [ -s "$SAMPLE_TEXT" ]; then
+    # The canonical 200MB sample already exists; derive only the top-k remap
+    # stats required by f32 --npy instead of rebuilding the corpus.
+    "$PYTHON" -u "$REPO_ROOT/scripts/f53-simplestories-tokenize.py" \
+      --parquet "$PARQUET" --text "$SAMPLE_TEXT" --out "$CORPUS" \
+      --stats "$STATS" --derive-stats-only --vocab 10000 --seed 42 \
+      > "$OUT_DIR/f53-simplestories-stats.log" 2>&1
+  else
+    "$PYTHON" -u "$REPO_ROOT/scripts/f53-simplestories-tokenize.py" \
+      --parquet "$PARQUET" --out "$CORPUS" --stats "$STATS" \
+      --target-bytes 200000000 --vocab 10000 --seed 42 \
+      > "$OUT_DIR/f53-simplestories-tokenize.log" 2>&1
+  fi
   rc=$?
   printf 'F53_TOKENIZE_RC=%s\n' "$rc" >> "$STATUS"
   if [ "$rc" -ne 0 ]; then
