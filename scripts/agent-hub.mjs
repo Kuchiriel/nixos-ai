@@ -759,6 +759,32 @@ function pollAB() {
   }
 }
 
+function pidAlive(pid) {
+  const n = Number(pid);
+  if (!Number.isInteger(n) || n <= 0) return false;
+  try { process.kill(n, 0); return true; } catch (e) { return e && e.code === 'EPERM'; }
+}
+
+// (25/11, medido) Estado EFETIVO de um spawn. O status gravado no checkpoint
+// (starting/done/failed) nao diz se o trabalho ainda anda: medido no host, 4
+// dos 29 state files estavam presos em "starting" ha 2,6 dias, sem processo
+// vivo. O PID do opencode run (child_pid, novo no checkpoint) permite
+// distinguir:
+//   starting + pid vivo  -> running  (a work continua)
+//   starting + pid morto -> dead     (morreu sem fechar o arquivo)
+//   done/failed          -> o que foi gravado
+//   sem pid (arquivo antigo) -> unknown (nao se presume nada)
+function effectiveSpawnStatus(j) {
+  const st = j && j.status;
+  if (st === 'done' || st === 'failed') return st;
+  if (st === 'starting') {
+    return pidAlive(j.child_pid) ? 'running' : 'dead';
+  }
+  if (st === 'running') return 'running';
+  if (st === 'idle') return 'idle';
+  return 'unknown';
+}
+
 function pollSpawns() {
   const dir = HOME + '/.local/state/jarvis/spawns';
   let files = [];
@@ -842,6 +868,28 @@ async function handler(req, res) {
       defaultInputModes: ['text'],
       defaultOutputModes: ['text'],
     }), 'application/json');
+  }
+  // F33: geracao real com o checkpoint word-level (playground do /lab)
+  if (req.method === 'GET' && url.pathname === '/lab/generate') {
+    const prompt = String(url.searchParams.get('prompt') || 'Once upon a time').slice(0, 120);
+    const n = Math.min(120, Math.max(10, parseInt(url.searchParams.get('n') || '60', 10)));
+    try {
+      const { execFileSync } = await import('node:child_process');
+      const out = execFileSync('/home/nixos/.venvs/finetune/bin/python', [
+        HOME + '/projects/nixos-ai/scripts/f33-generate.py', prompt, String(n),
+      ], { encoding: 'utf8', timeout: 60000,
+           env: { ...process.env,
+                  LD_LIBRARY_PATH: '/run/opengl-driver/lib:/run/current-system/sw/share/nix-ld/lib',
+                  TRITON_LIBCUDA_PATH: '/run/opengl-driver/lib' } });
+      return send(200, out.trim());
+    } catch (e) { return send(500, JSON.stringify({error: String(e).slice(0,200)})); }
+  }
+  // F30: dashboard do laboratorio do LLM do zero (servido pelo proprio hub)
+  if (req.method === 'GET' && (url.pathname === '/lab' || url.pathname === '/lab/')) {
+    try {
+      const lab = readFileSync(HOME + '/projects/nixos-ai/tools/lab-timeline/index.html', 'utf8');
+      return send(200, lab);
+    } catch { return send(404, 'lab dashboard ausente'); }
   }
   if (req.method === 'GET' && url.pathname === '/') {
     // (16/11) UI em arquivo proprio (agent-hub-ui.html), com o HTML inline
@@ -1349,12 +1397,24 @@ async function handler(req, res) {
   }
   if (req.method === 'GET' && url.pathname === '/api/spawns') {
     // Estado dos spawns recentes (o spawn e lento: o hub responde na hora).
+    // (25/11, medido) O status gravado pelo spawn (starting/done/failed) nao
+    // basta para o leitor: um spawn em "starting" pode estar rodando ou
+    // morto ha dias. Medido no host: 4 dos 29 state files estavam presos em
+    // "starting" ha 2,6 dias, sem NENHUM processo vivo. Agora o PID do
+    // opencode run vai no checkpoint e o hub deriva o estado EFETIVO:
+    //   starting + pid vivo  -> running  (a work ainda esta andando)
+    //   starting + pid morto -> dead     (o spawn morreu sem fechar)
+    //   done/failed          -> igual
     const out = [];
     try {
       const dir = HOME + '/.local/state/jarvis/spawns';
       const files = readdirSync(dir).filter(f => f.endsWith('.json')).sort();
       for (const f of files.slice(-12)) {
-        try { out.push(JSON.parse(readFileSync(dir + '/' + f, 'utf8'))); } catch { /* ignora */ }
+        try {
+          const j = JSON.parse(readFileSync(dir + '/' + f, 'utf8'));
+          j.effective_status = effectiveSpawnStatus(j);
+          out.push(j);
+        } catch { /* ignora */ }
       }
     } catch { /* sem spawns ainda */ }
     return send(200, JSON.stringify({ spawns: out }), 'application/json');

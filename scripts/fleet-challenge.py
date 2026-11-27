@@ -12,6 +12,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -145,17 +146,78 @@ def save_state(d: dict) -> None:
     RUN.write_text(json.dumps(d, indent=2, ensure_ascii=False))
 
 
+def bus_acks_observed() -> int:
+    """Quantos ACKs do desafio realmente aparecem no bus issue 100.
+
+    (24/11, medido) A persona escreve a submissao quando o turno dela acaba,
+    mas o ACK que ela espera pode chegar depois — o redteam escreveu as
+    10:27:48Z e o primeiro ACK (do dev) chegou as 10:47:35Z. A persona
+    reportou acks=0 com honestidade e foi reprovada. O runner e' a
+    autoridade do bus: conta os ACKs observados e injeta em
+    coord.acks_observed, sem mexer na contagem que a persona reportou.
+
+    (24/11, medido pelo operator) O filtro tem que ser de ACK DE VERDADE:
+    "ACK" + "challenge" na lowercase contava tambem "crouton-alpha" (que tem
+    "ack" dentro do nome, porque o filtro era case-insensitive) e posts de
+    coord como "**done** de `challenge-redteam`". Agora o corpo precisa
+    comecar com a marca do ACK, precedida de uma tag [challenge-...] (a forma
+    que as personas do desafio usam), e o "done"/"msg" nao conta.
+    """
+    rc, out = sh(["gh", "issue", "view", BUS_ISSUE, "--repo", BUS_REPO,
+                  "--json", "comments"], timeout=90)
+    if rc != 0 or not out:
+        return 0
+    try:
+        data = json.loads(out)
+    except Exception:
+        return 0
+    # `gh issue view --json comments` devolve {"comments": [...]}; a API
+    # direta devolve a lista direto. Aceita as duas formas.
+    comments = data.get("comments") if isinstance(data, dict) else data
+    if not isinstance(comments, list):
+        return 0
+    ack_re = re.compile(r"^\s*\[challenge-[a-z]+\]\s*ACK\b", re.I)
+    n = 0
+    for c in comments:
+        body = str(c.get("body") or "")
+        if ack_re.match(body):
+            n += 1
+    return n
+
+
 def score_all(state: dict | None = None) -> dict:
     mod = checker()
     infra = (state or {}).get("model_swaps", [])
+    acks_observed = (state or {}).get("acks_observed")
+    if acks_observed is None:
+        acks_observed = bus_acks_observed()
     out = {}
     for p in PERSONAS:
         f = SUB / f"{p}.json"
         if f.exists():
             try:
                 data = json.loads(f.read_text())
-                if infra and not ((data.get("model_swap") or {}).get("switches")):
-                    data.setdefault("model_swap", {})["switches"] = infra
+                ms = data.setdefault("model_swap", {})
+                if infra and not ms.get("switches"):
+                    # Houve troca de verdade no run: a persona tem de
+                    # reportar o que ela usou (o runner injeta o registro
+                    # canonico quando ela nao anotou).
+                    ms["switches"] = infra
+                elif not infra and not ms.get("switches"):
+                    # (24/11, medido) NAO HOUVE troca no run: o runner e' a
+                    # autoridade (ele e' quem registra model_swaps, l.187).
+                    # Sem esta declaracao, uma lista de switches vazia — que
+                    # o PROMPT manda reportar quando o modelo nao devolveu
+                    # 429/413 — reprovava no gate, e as 4 personas do run de
+                    # 20/11 falharam nele. Com ela, o gate mede o que
+                    # importa: a persona reportou a troca que aconteceu.
+                    ms["no_swap_needed"] = True
+                    ms["reason"] = (
+                        "nenhuma troca de modelo foi necessaria neste run: o "
+                        "runner nao registrou model_swaps (o modelo primario "
+                        "de cada persona respondeu)"
+                    )
+                data.setdefault("coord", {})["acks_observed"] = acks_observed
                 out[p] = mod.evaluate(data)
             except Exception as exc:
                 out[p] = {"passed": False, "error": f"{type(exc).__name__}: {exc}"}
@@ -172,11 +234,36 @@ def bus_post(text: str) -> str:
 
 def cmd_run(args) -> int:
     SUB.mkdir(parents=True, exist_ok=True)
-    state = {"started": datetime.now().isoformat(), "spawns": [], "scores": {},
-             "version": "1.0"}
+    # (24/11, medido) NAO APAGAR A EVIDENCIA DO RUN. O codigo recriava o
+    # state do zero, entao um run posterior com --skip-spawn (rescore) apagava
+    # os `spawns` e os `model_swaps` do run de verdade: medido, run.json ficou
+    # com "spawns": [] e "model_swaps": None apesar de 4 sessoes spawnadas e
+    # 4 claims no bus. Agora o state e' MESCLADO: o que o run anterior
+    # provou continua no disco.
+    prev = load_state()
+    state = {
+        "started": prev.get("started") or datetime.now().isoformat(),
+        "rescored_at": datetime.now().isoformat(),
+        "spawns": prev.get("spawns", []),
+        "model_swaps": prev.get("model_swaps", []),
+        "scores": {},
+        "version": prev.get("version", "1.0"),
+    }
     save_state(state)
     if not args.skip_spawn:
         state.setdefault("model_swaps", [])
+        # (24/11) Um run novo REINICIA os spawns e as trocas do dia: sem
+        # isso, mesclar o state antigo acumularia duplicata a cada rodada.
+        # O que nao se perde e o historico (abaixo, em "history").
+        prev_spawns = prev.get("spawns", [])
+        prev_swaps = prev.get("model_swaps", [])
+        if prev_spawns or prev_swaps:
+            hist = prev.get("history", [])
+            hist.append({"at": datetime.now().isoformat(),
+                         "spawns": prev_spawns, "model_swaps": prev_swaps})
+            state["history"] = hist
+        state["spawns"] = []
+        state["model_swaps"] = []
         for p in PERSONAS:
             candidates = [MODELS[p]] + FALLBACKS[p]
             r = {"persona": p, "error": "no candidate"}
