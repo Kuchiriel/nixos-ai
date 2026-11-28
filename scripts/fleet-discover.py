@@ -299,7 +299,7 @@ def hub_agents() -> list[dict]:
 
 
 def mcp_agents() -> list[dict]:
-    url = "http://100.121.100.103:8765/mcp"
+    url = os.environ.get("COORD_MCP_URL", "http://127.0.0.1:8765/mcp")
     def post(payload: dict, sid: str = "") -> tuple[dict, str]:
         headers = {"Content-Type": "application/json",
                    "Accept": "application/json, text/event-stream"}
