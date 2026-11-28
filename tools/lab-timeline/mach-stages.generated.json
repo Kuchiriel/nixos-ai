@@ -561,9 +561,7 @@
     "acc": 0.092,
     "steps": 960,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente",
-    "vram": null,
-    "seconds": 28.7
+    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente"
   },
   {
     "id": "f166-binary-s42-d384",
@@ -575,9 +573,7 @@
     "acc": 0.1064,
     "steps": 960,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente",
-    "vram": null,
-    "seconds": 67.0
+    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente"
   },
   {
     "id": "f166-binary-s42-d768",
@@ -589,9 +585,7 @@
     "acc": 0.1304,
     "steps": 960,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente",
-    "vram": null,
-    "seconds": 119.2
+    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente"
   },
   {
     "id": "f166-binary-s43-d192",
@@ -603,9 +597,7 @@
     "acc": 0.092,
     "steps": 960,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente",
-    "vram": null,
-    "seconds": 35.9
+    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente"
   },
   {
     "id": "f166-binary-s43-d384",
@@ -617,9 +609,7 @@
     "acc": 0.1062,
     "steps": 960,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente",
-    "vram": null,
-    "seconds": 49.4
+    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente"
   },
   {
     "id": "f166-binary-s43-d768",
@@ -631,8 +621,6 @@
     "acc": 0.1301,
     "steps": 960,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente",
-    "vram": null,
-    "seconds": 122.7
+    "note": "gate 3/3x2 PASSOU — ganho pequeno e consistente"
   }
 ]

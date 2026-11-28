@@ -7,7 +7,7 @@ h1{margin:0 0 6px} .sub{color:#8b949e;margin-bottom:20px}
 table{border-collapse:collapse;width:100%;font-size:13px} td,th{border-bottom:1px solid #30363d;padding:5px;text-align:left}
 button{cursor:pointer;background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:5px;padding:6px 10px}
 input{background:#0d1117;color:#e6edf3;border:1px solid #30363d;padding:7px;border-radius:5px;width:60%}
-</style></head><body>
+</style></head><body><div id="labLiveHost"></div>
 <h1>Laboratório do LLM do zero — linha do tempo</h1>
 <div class="sub">Dados: 219 medições de 17 frentes · nitro-v15 · hardware modesto</div>
 <section class="card" id="maquina">
@@ -312,17 +312,7 @@ function table(){
 }
 plot('val'); table();
 </script>
-<details style="margin:22px 0"><summary style="cursor:pointer;color:#8b949e">Ver visão antiga: Arquitetura — timelapse 2D (consolidada na máquina acima)</summary><section style="margin:22px 0;padding:16px;border:1px solid #30363d;border-radius:8px;background:#0d1117">
- <h2 style="margin-top:0">Arquitetura — timelapse 2D (dados medidos dos checkpoints)</h2>
- <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
-  <button id="archPlay" style="background:#238636;color:#fff;border:0;border-radius:6px;padding:6px 12px">▶ evoluir</button>
-  <input id="archRange" type="range" min="0" max="12" value="0" step="1" style="flex:1">
-  <strong id="archStep">1/7</strong>
- </div>
- <div id="archSvg"></div>
- <div id="archInfo" style="margin-top:10px;color:#e6edf3;font-size:14px"></div>
- <p style="color:#8b949e;font-size:12px;margin-bottom:0">Blocos: 2 de entrada + 4 recorrentes (loop elástico) + 2 de saída — medidos em <code>state_dict</code> (102 tensores). Largura ∝ d_model. Valores de val_loss vêm dos JSONs das frentes; nenhum número é estimado.</p>
-</section></details>
+
 <script>
 const ARCH=[{"label": "F53 · SimpleStories", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.7334, "acc": 0.5576, "steps": 9600, "corpus": "SimpleStories 47M", "note": null}, {"label": "F66 · curto", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.1716, "acc": 0.4988, "steps": 9600, "corpus": "TinyStories 200-700", "note": null}, {"label": "F71 · dedup8", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.7304, "acc": 0.4267, "steps": 9600, "corpus": "TinyStories dedup8", "note": null}, {"label": "F10 · 10M", "d": 320, "vocab": 10000, "params": 16.4, "val": 2.9782, "acc": 0.3977, "steps": 2400, "corpus": "TinyStories-valid", "note": null}, {"label": "F35 · 50M", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.3091, "acc": 0.4872, "steps": 9600, "corpus": "TinyStories-valid", "note": null}, {"label": "F38 · 50M early", "d": 704, "vocab": 10000, "params": 62.1, "val": null, "acc": null, "steps": 20000, "corpus": "TinyStories-valid", "note": null}, {"label": "F41 · 50M big", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.2267, "acc": 0.4976, "steps": 9600, "corpus": "TinyStories-valid", "note": null}, {"label": "F42 · 50M full", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.1358, "acc": 0.507, "steps": 9600, "corpus": "TinyStories-full", "note": null}, {"label": "F79 · 20k curado", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.4789, "acc": 0.605, "steps": 20000, "corpus": "SimpleStories 210M", "note": "H3: 20k passos no corpus curado"}, {"label": "F37 · 150M lr", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.3199, "acc": 0.4856, "steps": 9600, "corpus": "TinyStories-valid", "note": null}, {"label": "F43 · 150M full", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.9762, "acc": 0.5314, "steps": 9600, "corpus": "TinyStories-full", "note": null}, {"label": "F44 · 300M full", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.2159, "acc": 0.4951, "steps": 9600, "corpus": "TinyStories-full", "note": null}, {"label": "F45 · 300M QAT", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.1405, "acc": 0.5254, "steps": 19200, "corpus": "TinyStories-full", "note": null}, {"label": "F47 · 150M early", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.7037, "acc": 0.5745, "steps": 24000, "corpus": "TinyStories-full", "note": null}, {"label": "F75 · curado 210M", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.6749, "acc": 0.5722, "steps": 9600, "corpus": "SimpleStories 210M", "note": null}, {"label": "F36 · 50M/30k", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.8175, "acc": 0.4713, "steps": 30000, "corpus": "TinyStories-valid", "note": null}, {"label": "F39 · 150M lr1e-4", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.2846, "acc": 0.4889, "steps": 9600, "corpus": "TinyStories-valid", "note": null}, {"label": "F46 · 300M QAT/40k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.8831, "acc": 0.5611, "steps": 40000, "corpus": "TinyStories-full", "note": null}, {"label": "F49 · 150M/40k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.5913, "acc": 0.5944, "steps": 40000, "corpus": "TinyStories-full", "note": null}, {"label": "F50 · 150M/60k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.5109, "acc": 0.6089, "steps": 60000, "corpus": "TinyStories-full", "note": null}, {"label": "F52 · 150M/68k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.4859, "acc": 0.6128, "steps": 68000, "corpus": "TinyStories-full", "note": null}];
 let archTimer=null;
@@ -411,7 +401,7 @@ gallery();
 </script>
 <section style="margin:22px 0;padding:16px;border:1px solid #30363d;border-radius:8px;background:#0d1117">
  <h2 style="margin-top:0">Histórico de frentes — todas as medições do dashboard (F1→F79)</h2>
- <p style="color:#8b949e;font-size:12px">Frentes anteriores a F32 não têm checkpoint preservado neste diretório; por isso o diagrama 2D começa em F10, mas os valores abaixo vêm dos JSONs medidos. Clique em uma frente para ver as variantes na galeria.</p>
+ 
  <div id="historico"></div>
 </section>
 <script>
@@ -796,4 +786,95 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
 </script>
 /* LAB_MOBILE_END */
-</body></html>
+
+</script>
+/* LAB_MOBILE_END */
+
+</script>
+/* LAB_MOBILE_END */
+/* LAB_LIVE_BEGIN */
+<script>
+window.LAB_LIVE={"ts": "2026-11-28T15:27:27Z", "epoch": 1795879647, "jobs": [{"id": "F168-dedup-variantes", "done": true, "kaggle": "", "file": true}, {"id": "F167-escala-parametros", "done": true, "kaggle": "", "file": true}, {"id": "F166-corpus-mais-passos", "done": true, "kaggle": "", "file": true}, {"id": "F160-posicao4096", "done": true, "kaggle": "", "file": null}, {"id": "F144-robustez", "done": false, "kaggle": "kuchiriel/f144-robustez has status \"KernelWorkerStatus.QUEUED\"", "file": null}, {"id": "F143-calibracao-v2", "done": false, "kaggle": "kuchiriel/f143-calibracao-v2 has status \"KernelWorkerStatus.QUEUED\"", "file": null}, {"id": "F156-elastic", "done": true, "kaggle": "", "file": true}, {"id": "F154-H1", "done": true, "kaggle": "", "file": true}, {"id": "KAGGLE-BETA-ANCHOR", "done": true, "kaggle": "", "file": null}], "local": {"f166": true, "f167": {"step": null, "loss": null, "seed": 43, "d": 1216}, "f168": {"step": null, "loss": null, "seed": null, "d": null}, "f160": {"tail": "F160 ALL_DONE 2026-11-28T14:32:15Z"}}, "queue": "/home/nixos/work/hybrid/async-events.jsonl"};
+/* LAB_LIVE_BEGIN — painel de execução ao vivo e caixa de geração legível.
+   Fonte: tools/lab-timeline/lab-live.js (injetado por scripts/lab-view-sync.py).
+   Dados: window.LAB_LIVE, escrito pelo poller em live-status.json. */
+(function () {
+  const css = document.createElement('style');
+  css.textContent = `
+    #labLive{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:14px 0}
+    #labLive .job{background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:11px 12px;min-width:0}
+    #labLive .job b{display:block;font:600 12px ui-monospace,monospace;color:#79c0ff;overflow-wrap:anywhere}
+    #labLive .st{font:11px ui-monospace,monospace;color:#8b949e;overflow-wrap:anywhere}
+    #labLive .ok{color:#3fb950}.run{color:#d29922}.wait{color:#8b949e}
+    #labLive .bar{height:4px;background:#21262d;border-radius:4px;margin-top:7px;overflow:hidden}
+    #labLive .bar i{display:block;height:100%;background:#238636}
+    #prompt,#out{width:100%;max-width:100%;box-sizing:border-box;overflow-wrap:anywhere}
+    #out{white-space:pre-wrap;max-height:240px;overflow:auto;background:#0d1117;padding:12px;border-radius:8px;border:1px solid #30363d}
+    #genTags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    #genTags button{font-size:12px;padding:4px 9px}
+    #genTags .tag{color:#3fb950;border-color:#238636}
+  `;
+  document.head.appendChild(css);
+
+  const L = window.LAB_LIVE || {};
+  const host = document.getElementById('labLiveHost');
+  if (host) {
+    const jobs = (L.jobs || []).map(j => {
+      const k = (j.kaggle || '');
+      const state = j.done ? '<span class="ok">concluído</span>'
+        : k.includes('RUNNING') ? '<span class="run">Kaggle RUNNING</span>'
+        : k.includes('QUEUED') ? '<span class="wait">Kaggle QUEUED</span>'
+        : j.kaggle === '' ? '<span class="run">local / fila</span>'
+        : '<span class="wait">—</span>';
+      const pct = j.done ? 100 : (k.includes('RUNNING') ? 55 : k.includes('QUEUED') ? 12 : 35);
+      return `<div class="job"><b>${j.id}</b><div class="st">${state}</div>` +
+        `<div class="st">${(j.kaggle || '').replace(/^.*status /, '').slice(0, 70)}</div>` +
+        `<div class="bar"><i style="width:${pct}%"></i></div></div>`;
+    }).join('');
+    const local = L.local || {};
+    const extra = `<div class="job"><b>poller / relógio</b><div class="st">${L.ts || 'sem heartbeat'}</div>` +
+      `<div class="st">F166 ${local.f166 ? 'medido' : '—'} · F167 ${(local.f167 || {}).step || (local.f167 || {}).seed || '—'} · F168 ${(local.f168 || {}).corpus || (local.f168 || {}).seed || '—'}</div>` +
+      `<div class="st">atualiza sozinho a cada 15 s</div></div>`;
+    host.innerHTML = jobs + extra;
+  }
+
+  // Caixa de geração: quebra linha, nao vaza para a direita, e aceita tag humana.
+  const out = document.getElementById('out');
+  if (out) {
+    const tags = document.createElement('div');
+    tags.id = 'genTags';
+    const saved = JSON.parse(localStorage.getItem('lab-gen-tags') || '[]');
+    const paint = () => {
+      tags.innerHTML = saved.slice(-5).map(t => `<span class="tag">${t}</span>`).join('');
+    };
+    ['boa', 'ruim', 'neutra', 'repetitiva', 'criativa'].forEach(label => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.onclick = () => {
+        saved.push(new Date().toISOString().slice(11, 16) + ' ' + label + ' :: ' + out.textContent.slice(0, 60));
+        localStorage.setItem('lab-gen-tags', JSON.stringify(saved.slice(-50)));
+        paint();
+      };
+      tags.appendChild(b);
+    });
+    out.parentNode.insertBefore(tags, out.nextSibling);
+    paint();
+  }
+
+  // Remove texto inútil / view legada do rodapé.
+  document.querySelectorAll('p').forEach(p => {
+    const t = p.textContent || '';
+    if (t.includes('Inspiração de visualização') || t.includes('Frentes anteriores a F32')) p.remove();
+  });
+  document.querySelectorAll('details').forEach(d => {
+    if ((d.textContent || '').includes('Ver visão antiga')) d.remove();
+  });
+})();
+/* LAB_LIVE_END */
+
+</script>
+/* LAB_LIVE_END */
+
+</script>
+/* LAB_LIVE_END */
+<script>/* LAB_AUTOREFRESH */setTimeout(function(){sessionStorage.setItem("labScroll",String(window.scrollY));location.reload();},20000);window.addEventListener("load",function(){window.scrollTo(0,Number(sessionStorage.getItem("labScroll")||0));});</script></body></html>

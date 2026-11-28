@@ -21,6 +21,13 @@ PRIN = 'improver-termux-fast@termux:ses_e52816aa7ffe4zi1iV7cJ8mvtc'
 MY_SID = 'ses_e52816aa7ffe4zi1iV7cJ8mvtc'  # sessionID explicito (codinome pode duplicar)
 JOBS = [
     {
+        'id': 'F168-dedup-variantes',
+        'kind': 'file',
+        'path': str(HERE / 'work/hybrid/f168-dedup.json'),
+        'task': 'improver-termux-fast: termux/F168-corpus-dedup-variantes',
+        'reason': 'F168: aguardando 3 corpora × 2 braços (960 passos, seed42)',
+    },
+    {
         'id': 'F167-escala-parametros',
         'kind': 'file',
         'path': str(HERE / 'work/hybrid/f167-escala.json'),
@@ -164,6 +171,25 @@ def f143_summary(out: Path, fname: str = 'f143-calibracao.json', label: str = 'F
         return f'{label}: JSON presente mas falha ao aplicar gate: {type(e).__name__}: {e}'
 
 
+def f168_summary() -> str:
+    p = HERE / 'work/hybrid/f168-dedup.json'
+    if not p.exists():
+        return 'F168: JSON ainda nao existe'
+    try:
+        rows = json.loads(p.read_text(encoding='utf-8'))['results']
+        parts, ok = [], True
+        for r in rows:
+            dv = round(r['binary']['val_loss'] - r['control']['val_loss'], 4)
+            da = round(r['binary']['acc'] - r['control']['acc'], 4)
+            good = dv <= 0.02 and da >= -0.01
+            ok = ok and good
+            parts.append(f"{r['corpus']} {dv:+.4f}/{da:+.4f}")
+        return ('F168 MEDIDO (3 corpora, 960 passos, seed42): ' + ' | '.join(parts)
+                + ('. GATE 3/3 PASSOU' if ok else '. GATE NAO PASSOU — sem renegociar'))
+    except Exception as e:
+        return f'F168: falha ao aplicar gate: {type(e).__name__}: {e}'
+
+
 def f167_summary() -> str:
     p = HERE / 'work/hybrid/f167-escala.json'
     if not p.exists():
@@ -237,6 +263,34 @@ def f160_summary() -> str:
             'threshold absoluto 1,6749 de F98 NAO comparavel nesta escala): '
             + ' | '.join(parts)
             + ('. GATE RELATIVO PASSOU' if ok else '. GATE RELATIVO NAO PASSOU'))
+
+
+def write_live(done: set) -> None:
+    """Estado maquina legivel para o /lab mostrar o que roda onde."""
+    def tail_step(name: str) -> dict:
+        p = HERE / 'work/hybrid' / f'{name}-run.log'
+        if not p.exists():
+            return {'log': 'ausente'}
+        lines = p.read_text(errors='ignore').splitlines()[-1:] or ['']
+        try:
+            r = json.loads(lines[0])
+            return {'step': r.get('step'), 'loss': r.get('loss'),
+                    'seed': r.get('seed'), 'd': r.get('d')}
+        except Exception:
+            return {'tail': lines[0][:160]}
+    jobs = []
+    for job in JOBS:
+        jobs.append({'id': job['id'],
+                     'done': job['id'] in done,
+                     'kaggle': STATUS_SEEN.get(job['id'], ''),
+                     'file': bool(Path(job.get('path', '')).exists()) if job.get('path') else None})
+    live = {'ts': ts(), 'epoch': int(time.time()), 'jobs': jobs,
+            'local': {'f166': Path(HERE / 'work/hybrid/f166-corpus.json').exists(),
+                      'f167': tail_step('f167'), 'f168': tail_step('f168'),
+                      'f160': tail_step('f160')},
+            'queue': str(HERE / 'work/hybrid/async-events.jsonl')}
+    p = HERE / 'work/hybrid/live-status.json'
+    p.write_text(json.dumps(live, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def record(fh, rec: dict) -> None:
@@ -321,7 +375,9 @@ def main() -> None:
                         job['reason'] += ' | output=' + (b or a)[:120]
             if not ok:
                 continue
-            if job['id'] == 'F160-posicao4096':
+            if job['id'] == 'F168-dedup-variantes':
+                job['reason'] = f168_summary()
+            elif job['id'] == 'F160-posicao4096':
                 job['reason'] = f160_summary()
             elif job['id'] == 'F166-corpus-mais-passos':
                 job['reason'] = f166_summary()
@@ -350,6 +406,7 @@ def main() -> None:
             if time.time() - LAST_PING > 1800:
                 LAST_PING = time.time()
                 ping('POLLER heartbeat ' + ts() + ' :: ' + json.dumps(STATUS_SEEN)[:400])
+        write_live(done)
         time.sleep(60)
 
 
