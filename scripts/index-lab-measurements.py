@@ -43,7 +43,7 @@ def main() -> int:
     hits = HybridSearch(cfg).search(q, top_k=5, collection=cfg.qdrant_collection_code)
     out = {"collection": cfg.qdrant_collection_code, "indexed": n,
            "files": len(files), "fail": fails[:5], "query": q,
-           "hits": [{"path": str(getattr(h, "source", "")),
+           "hits": [{"path": str(getattr(h, "path", "")),
                      "score": round(float(getattr(h, "score", 0) or 0), 3)} for h in hits]}
     print(json.dumps(out, ensure_ascii=False, indent=2))
     return 0 if n > 0 and hits else 2
