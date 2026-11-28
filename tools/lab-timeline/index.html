@@ -33,7 +33,8 @@ const MACH_STAGES=[
  {id:'f52',date:'26/11',label:'F52 · 68k',d:1216,params:167.0,val:1.4859,acc:0.6128,steps:68000,corpus:'TinyStories-full',note:'Fronte do corpus curado antes de H3.'},
  {id:'f75',date:'26/11',label:'F75 · curado',d:1216,params:167.0,val:1.6749,acc:0.5722,steps:9600,corpus:'SimpleStories 210M',note:'Corpus curado bate volume com 7× menos passos.'},
  {id:'f79',date:'27/11',label:'F79 · 20k curado',d:1216,params:167.0,val:1.4789,acc:0.6050,steps:20000,corpus:'SimpleStories 210M',note:'H3 apoiada: 20k no curado vence 68k no volume.'},
- {id:'f138',date:'28/11',label:'F136→F138 · FineWeb',d:1216,params:167.0,val:null,acc:null,steps:9600,corpus:'FineWeb-Edu 1B (ids prontos)',note:'1B ids materializados com remap top-10000; val_loss PENDENTE de GPU.'}
+ {id:'f138',date:'28/11',label:'F136→F138 · FineWeb',d:1216,params:167.0,val:null,acc:null,steps:9600,corpus:'FineWeb-Edu 1B (ids prontos)',note:'1B ids materializados com remap top-10000; val_loss PENDENTE de GPU.'},
+ {id:'f128',date:'28/11',label:'F128 · byte+EOT',d:1312,params:166.67,val:null,acc:null,steps:9600,corpus:'TinyStories 24,9M ids (vocab 257)',note:'Gate F102 pre-registrado; treino em curso — val_loss pendente.'}
 ];
 const MACH_PARTS={
  token:{t:'Token de entrada',m:'Remapeamento do vocabulário para os 10000 ids mais comuns; OOV cai no id 0.',f:'build_tokens(topk=10000, OOV→0)',code:'work/hybrid/f32-ablation.py:22',i:'texto do corpus',o:'id ∈ [0,9999]',store:'—',loop:'—',nums:[['vocab', '10000','REAL'],['ids FineWeb','1.000.000.000','REAL']],gate:'F118: token_count ≥1B PASSA'},
@@ -58,6 +59,17 @@ const MACH_PARTS={
  logits:{t:'Logits → próximo token',m:'Argmax/softmax sobre 10000 logits produz o próximo id; é a única saída visível da máquina.',f:'p = softmax(logits)',code:'loop de geração',i:'logits',o:'id seguinte',store:'—',loop:'realimenta o token de entrada',nums:[['temperatura','1 (sem amostragem no playground)','REAL']],gate:'playground sem teacher forcing'}
 };
 const MACH_COL={in:'#1f6feb',loop:'#8957e5',out:'#238636',head:'#d29922',mem:'#484f58',flow:'#f0883e'};
+const MACH_MECH={
+ f10:'mecanismo basico: embedding + posicao + 8 blocos (4 recorrentes com pesos compartilhados)',
+ f35:'curva de escala 10M->50M; mesmo protocolo, mais parametros',
+ f43:'corpus maior (TinyStories-full) vence arquitetura: baseline do gate F118',
+ f47:'mais passos no mesmo corpus (early exit simples insuficiente)',
+ f52:'curva de passos 68k: ganho achatando, sinal de trocar de corpus',
+ f75:'corpus curado SimpleStories 210M bate volume com menos passos',
+ f79:'H3: 20k passos no curado superam 68k no volume (1,4789)',
+ f138:'corpus de escada FineWeb-Edu 3,01B tokens com remap top-10000',
+ f128:'byte+EOT: vocab 257, EOT 256, parametros de camada pareados (d=1312)'
+};
 const MACH_AUDIT={
  beta:'F91 cuidado: beta e alpha sao nn.Parameter aprendiveis (scale-loop-ablation.py:43/101), nao hiperparametros fixos; o gate compara com um beta que o modelo aprendeu.',
  pos:'F134 reclassificada: pos4096 com seq256 nunca visita posicoes 257-4095; e smoke test de implementacao, nao gate de contexto longo (exige seq>=4096).',
@@ -156,6 +168,7 @@ function machDetail(id,s){
  h+=`<b>Fórmula:</b> <code style="color:#79c0ff">${p.f}</code>　<b>Código:</b> <code style="color:#79c0ff">${p.code}</code><br>`;
  h+=`<b>Entra:</b> ${p.i}　<b>Sai:</b> ${p.o}　<b>Fica em:</b> ${p.store}　<b>Loop:</b> ${p.loop}<br>`;
  h+=`<b>Números:</b> `+p.nums.map(n=>`${n[0]}=${n[1]}${badge(n[2])}`).join(' · ');
+ h+=`<br><b>Mecanismo deste marco:</b> ${MACH_MECH[s.id]||'—'}`;
  h+=`<br><b>Gate:</b> ${p.gate}`;
  if(MACH_AUDIT[id]) h+=`<br><b style=\"color:#f0883e\">Auditoria 28/11:</b> ${MACH_AUDIT[id]}`;
  h+=`<br><span style="color:#8b949e">Marco atual: ${s.label} · val=${s.val===null?'não medido':s.val} · acc=${s.acc===null?'não medido':s.acc} · ${s.steps.toLocaleString()} passos</span>`;
