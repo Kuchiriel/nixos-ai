@@ -16,8 +16,17 @@ EVENTS = HERE / 'work/hybrid/async-events.jsonl'
 PHONE = 'u0_a438@100.104.175.123'  # PC->celular no tailnet funciona (assimetria: celular->PC caiu)
 AW = '/data/data/com.termux/files/home/bin/auto-wake'
 BUS = '/data/data/com.termux/files/home/bin/bus-post'
+DIRECT = '/data/data/com.termux/files/home/bin/direct-msg'
 PRIN = 'improver-termux-fast@termux:ses_e52816aa7ffe4zi1iV7cJ8mvtc'
+MY_SID = 'ses_e52816aa7ffe4zi1iV7cJ8mvtc'  # sessionID explicito (codinome pode duplicar)
 JOBS = [
+    {
+        'id': 'F166-corpus-mais-passos',
+        'kind': 'file',
+        'path': str(HERE / 'work/hybrid/f166-corpus.json'),
+        'task': 'improver-termux-fast: termux/F166-corpus-mais-passos',
+        'reason': 'F166: aguardando 12 braços (3 tamanhos × 2 sementes × 2 condições)',
+    },
     {
         'id': 'F160-posicao4096',
         'kind': 'files3',
@@ -107,6 +116,18 @@ def ts() -> str:
     return time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 
 
+def ping(text: str, kind: str = 'msg') -> tuple[str, str]:
+    """Publica no bus E injeta na sessao do dono pelo direct-msg.
+
+    O plugin consome direct-msg.jsonl no idle e injeta com synthetic —
+    mesmo caminho usado pelo auto-wake. Texto curto, sessionID explicito.
+    """
+    _, bus = phone(BUS, text[:1200], '--kind', 'status')
+    rc, dm = phone(DIRECT, MY_SID, text[:800], '--kind', kind,
+                   '--from', 'poller-async')
+    return bus[:120], f'rc={rc} {dm[:120]}'
+
+
 def f143_summary(out: Path, fname: str = 'f143-calibracao.json', label: str = 'F143') -> str:
     """Le o JSON medido e aplica o gate PRE-REGISTRADO (sem renegociar)."""
     p = out / fname
@@ -134,6 +155,29 @@ def f143_summary(out: Path, fname: str = 'f143-calibracao.json', label: str = 'F
                 + ('. GATE PRE-REGISTRADO PASSOU' if ok else '. GATE PRE-REGISTRADO NAO PASSOU — hipotese nao promovida, sem renegociar'))
     except Exception as e:
         return f'{label}: JSON presente mas falha ao aplicar gate: {type(e).__name__}: {e}'
+
+
+def f166_summary() -> str:
+    p = HERE / 'work/hybrid/f166-corpus.json'
+    if not p.exists():
+        return 'F166: JSON ainda nao existe'
+    try:
+        d = json.loads(p.read_text(encoding='utf-8'))
+        rows = d['results']
+        parts, ok = [], True
+        for seed in (42, 43):
+            for dim in (192, 384, 768):
+                r = next(x for x in rows if x['seed'] == seed and x['d'] == dim)
+                dv = round(r['binary']['val_loss'] - r['control']['val_loss'], 4)
+                da = round(r['binary']['acc'] - r['control']['acc'], 4)
+                p = dv <= 0.02 and da >= -0.01
+                ok = ok and p
+                parts.append(f's{seed}/d{dim} {dv:+.4f}/{da:+.4f}')
+        return ('F166 MEDIDO (960 passos, corpus dedup8 20M, 2 sementes): '
+                + ' | '.join(parts)
+                + ('. GATE 3/3x2 PASSOU' if ok else '. GATE NAO PASSOU — sem renegociar'))
+    except Exception as e:
+        return f'F166: falha ao aplicar gate: {type(e).__name__}: {e}'
 
 
 def f160_summary() -> str:
@@ -175,10 +219,11 @@ STATUS_SEEN: dict[str, str] = {}
 STATUS_SINCE: dict[str, float] = {}
 STUCK_WARNED: set[str] = set()
 LAST_BEAT = 0.0
+LAST_PING = 0.0
 
 
 def main() -> None:
-    global LAST_BEAT
+    global LAST_BEAT, LAST_PING
     EVENTS.parent.mkdir(parents=True, exist_ok=True)
     done = set()
     if EVENTS.exists():
@@ -217,12 +262,12 @@ def main() -> None:
                     with EVENTS.open('a', encoding='utf-8') as f:
                         record(f, {'event': 'status_change', 'id': job['id'],
                                    'ts': ts(), 'from': prev, 'to': sig[:160]})
-                    phone(BUS, f"POLLER {job['id']}: {prev or 'inicio'} -> {sig[:120]}", '--kind', 'msg')
+                    ping(f"POLLER {job['id']}: {prev or 'inicio'} -> {sig[:120]}")
                 if ('QUEUED' in sig.upper()
                         and now - STATUS_SINCE.get(job['id'], now) > 3600
                         and job['id'] not in STUCK_WARNED):
                     STUCK_WARNED.add(job['id'])
-                    phone(BUS, f"POLLER {job['id']}: Kaggle QUEUED ha >1h sem saida — verificar fila/conta; nao e erro de codigo.", '--kind', 'msg')
+                    ping(f"POLLER {job['id']}: Kaggle QUEUED ha >1h sem saida — verificar fila/conta; nao e erro de codigo.")
                 erro = 'ERROR' in status.upper()
                 ok = 'COMPLETE' in status.upper() or erro
                 if erro:
@@ -230,7 +275,7 @@ def main() -> None:
                     with EVENTS.open('a', encoding='utf-8') as f:
                         record(f, {'event': 'job_error', 'id': job['id'], 'ts': ts(),
                                    'log': lg[:400]})
-                    _, bus = phone(BUS, f"JOB {job['id']} ERROU no Kaggle; numeros AINDA NAO medidos: " + lg[:220], '--kind', 'msg')
+                    bus, dm = ping(f"JOB {job['id']} ERROU no Kaggle; numeros AINDA NAO medidos: " + lg[:220])
                     # nao fechar tarefa sem numero medido; so parar de retryar.
                     done.add(job['id'])
                     continue
@@ -249,6 +294,8 @@ def main() -> None:
                 continue
             if job['id'] == 'F160-posicao4096':
                 job['reason'] = f160_summary()
+            elif job['id'] == 'F166-corpus-mais-passos':
+                job['reason'] = f166_summary()
             with EVENTS.open('a', encoding='utf-8') as f:
                 record(f, {'event': 'job_done', 'id': job['id'], 'ts': ts()})
             rc, out = phone(AW, 'complete', job['task'], '--principal', PRIN,
@@ -259,16 +306,19 @@ def main() -> None:
                 rc2, out2 = phone(AW, 'archive', job['task'].split(': termux/')[-1],
                                   '--reason', job['reason'])
                 out += ' | archive=' + out2[:120]
-            _, bus = phone(BUS, job['reason'], '--kind', 'msg')
+            bus, dm = ping(job['reason'])
             with EVENTS.open('a', encoding='utf-8') as f:
                 record(f, {'event': 'complete', 'id': job['id'], 'rc': rc,
-                           'out': out[:200], 'bus': bus[:120]})
+                           'out': out[:200], 'bus': bus[:120], 'direct': dm[:120]})
             done.add(job['id'])
         if time.time() - LAST_BEAT > 600:
             LAST_BEAT = time.time()
             with EVENTS.open('a', encoding='utf-8') as f:
                 record(f, {'event': 'heartbeat', 'ts': ts(),
                            'jobs': len(JOBS), 'status': dict(STATUS_SEEN)})
+            if time.time() - LAST_PING > 1800:
+                LAST_PING = time.time()
+                ping('POLLER heartbeat ' + ts() + ' :: ' + json.dumps(STATUS_SEEN)[:400])
         time.sleep(60)
 
 
