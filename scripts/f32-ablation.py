@@ -51,7 +51,12 @@ def main():
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--ckpt", default="")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--model-src", default="",
+                    help="arquivo ScaleLM alternativo (F129: scale-loop-blocksfix.py)")
     a = ap.parse_args()
+    if a.model_src:
+        SRC = Path(a.model_src)
+        print(json.dumps({"model_src": str(SRC)}), flush=True)
     import runpy
     ScaleLM = runpy.run_path(str(SRC))["ScaleLM"]
     random.seed(a.seed); torch.manual_seed(a.seed)
