@@ -23,12 +23,41 @@ TECH = ("arithmetic coding", "kv cache", "entropy", "attention", "quantization",
         "speculative", "retrieval", "compression", "multimodal", "elastic",
         "loop", "sparse", "tokenizer", "browser", "harness")
 
+def bootstrap():
+    """Auto-conserto de invocacao (medido 28/11): o script quebrava com
+    'No module named jarvis'/'requests' quando rodado com o python3 do sistema.
+    Se o import ja funciona, segue; senao re-exec com o venv lab + PYTHONPATH
+    do jarvis. Uma vez so (ALIEN_BOOTSTRAPPED evita loop)."""
+    import os
+    import sys
+    if os.environ.get("ALIEN_BOOTSTRAPPED"):
+        return
+    try:
+        import requests  # noqa: F401
+        sys.path.insert(0, os.path.expanduser(
+            "~/projects/nixos-ai/modules/ai/jarvis/src"))
+        import jarvis.core.rag  # noqa: F401
+        return
+    except Exception:
+        pass
+    venv = os.path.expanduser("~/.venvs/lab/bin/python")
+    src = os.path.expanduser("~/projects/nixos-ai/modules/ai/jarvis/src")
+    # NixOS: realpath do python3 do sistema e do venv podem ser O MESMO binario
+    # (medido 28/11) — nao comparar realpath; o venue cumpre o papel pelo
+    # pyvenv.cfg do diretorio. A bandeira ALIEN_BOOTSTRAPPED evita o loop.
+    if os.path.exists(venv):
+        env = dict(os.environ, ALIEN_BOOTSTRAPPED="1")
+        old = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = src + (":" + old if old else "")
+        os.execve(venv, [venv] + sys.argv, env)
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
     ap.add_argument("--collections", default="code_index,books,jarvis_test_frontier_2026_11")
     ap.add_argument("--top", type=int, default=12)
     a = ap.parse_args()
+    bootstrap()
     from jarvis.core.rag import HybridSearch
     hs = HybridSearch()
     colls = [c.strip() for c in a.collections.split(",") if c.strip()]

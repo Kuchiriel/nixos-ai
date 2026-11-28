@@ -393,6 +393,11 @@ def build_server():
         except Exception:
             embed_health_url = "http://127.0.0.1:8081/health"
         out["router_8080"] = porta_aberta(8080)
+        # MEDIDO 28/11: a :8080 e' o llama-wackmall.service (Qwen3.6-35B-A3B
+        # Q4_K_M, profiling), `disabled` by design — false aqui e' o ESTADO
+        # NORMAL, nao servico caido. Falso alarme corrigido com a nota.
+        out["router_8080_nota"] = ("opcional: profiling llama-wackmall (disabled by design); "
+                                   "false = normal, nao e falha de saude")
         out["mtp_8092"] = porta_aberta(8092)
         out["qdrant_6333"] = porta_aberta(6333)
         out["embeddings_8081"] = http_ok(embed_health_url)
