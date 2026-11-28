@@ -34,7 +34,8 @@ const MACH_STAGES=[
  {id:'f75',date:'26/11',label:'F75 · curado',d:1216,params:167.0,val:1.6749,acc:0.5722,steps:9600,corpus:'SimpleStories 210M',note:'Corpus curado bate volume com 7× menos passos.'},
  {id:'f79',date:'27/11',label:'F79 · 20k curado',d:1216,params:167.0,val:1.4789,acc:0.6050,steps:20000,corpus:'SimpleStories 210M',note:'H3 apoiada: 20k no curado vence 68k no volume.'},
  {id:'f138',date:'28/11',label:'F136→F138 · FineWeb',d:1216,params:167.0,val:null,acc:null,steps:9600,corpus:'FineWeb-Edu 1B (ids prontos)',note:'1B ids materializados com remap top-10000; val_loss PENDENTE de GPU.'},
- {id:'f128',date:'28/11',label:'F128 · byte+EOT',d:1312,params:166.67,val:null,acc:null,steps:9600,corpus:'TinyStories 24,9M ids (vocab 257)',note:'Gate F102 pre-registrado; treino em curso — val_loss pendente.'}
+ {id:'f128',date:'28/11',label:'F128 · byte+EOT',d:1312,params:166.67,val:null,acc:null,steps:9600,corpus:'TinyStories 24,9M ids (vocab 257)',note:'Gate F102 pre-registrado; treino em curso — val_loss pendente.'},
+ {id:'f129',date:'28/11',label:'F129 · blocos mortos',d:1216,params:167.0,val:1.6982,acc:0.566,steps:9600,corpus:'SimpleStories ownremap 210M',note:'Controle do A/B: bloco 2 repetido 4x; ativar os 4 blocos piorou 0,0709 nat.'}
 ];
 const MACH_PARTS={
  token:{t:'Token de entrada',m:'Remapeamento do vocabulário para os 10000 ids mais comuns; OOV cai no id 0.',f:'build_tokens(topk=10000, OOV→0)',code:'work/hybrid/f32-ablation.py:22',i:'texto do corpus',o:'id ∈ [0,9999]',store:'—',loop:'—',nums:[['vocab', '10000','REAL'],['ids FineWeb','1.000.000.000','REAL']],gate:'F118: token_count ≥1B PASSA'},
@@ -68,12 +69,13 @@ const MACH_MECH={
  f75:'corpus curado SimpleStories 210M bate volume com menos passos',
  f79:'H3: 20k passos no curado superam 68k no volume (1,4789)',
  f138:'corpus de escada FineWeb-Edu 3,01B tokens com remap top-10000',
- f128:'byte+EOT: vocab 257, EOT 256, parametros de camada pareados (d=1312)'
+ f128:'byte+EOT: vocab 257, EOT 256, parametros de camada pareados (d=1312)',
+ f129:'A/B medido: ativar os 4 blocos recorrentes piora val_loss de 1,6982 para 1,7691 — blocos nao executados regularizam'
 };
 const MACH_AUDIT={
  beta:'F91 cuidado: beta e alpha sao nn.Parameter aprendiveis (scale-loop-ablation.py:43/101), nao hiperparametros fixos; o gate compara com um beta que o modelo aprendeu.',
  pos:'F134 reclassificada: pos4096 com seq256 nunca visita posicoes 257-4095; e smoke test de implementacao, nao gate de contexto longo (exige seq>=4096).',
- loop:'F130 elastic (condicionamento por indice do loop, init zero) esta implementado mas NUNCA treinado — oportunidade perdida desde 27/11.',
+ loop:'F129 (28/11): 4 blocos ativos pioram 0,0709 nat vs bloco unico repetido 4x; os ~53M params nao executados regularizam. F130 elastic segue sem treino.',
  attn:'F96/F106 encerradas: compressao KV 4,95% da VRAM e decode 567x acima do orçamento; nao reabrir sem kernel GPU medido.',
  kv:'Cache real implementado e validado por equivalencia em 24/11 (commit 15441d6e); custo de Kok foi medido, mas tempo real de decode nao.',
  b67:'F123 halting: curva forcada depth1-4 + sweep epsilon prontos em halting_probe.py, mas NUNCA executados (F133).',
