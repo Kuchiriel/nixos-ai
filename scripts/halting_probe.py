@@ -47,7 +47,8 @@ def main():
                                  dtype=torch.long, device=a.device)
                 lg, tr = m(x, causal=True, max_loops=t, return_trace=True)
                 lp = torch.log_softmax(lg[:, -1, :].float(), -1)
-                vl += float(-lp.gather(1, y[:, -1:]).sum()); corr += int((lp.argmax(-1)==y[:, -1]).sum()); cnt += y.shape[0]
+                # logits na ultima posicao preveem o PRIMEIRO token de y
+                vl += float(-lp.gather(1, y[:, :1]).sum()); corr += int((lp.argmax(-1)==y[:, 0]).sum()); cnt += y.shape[0]
             forced[f"depth{t}"] = {"val_loss": round(vl/cnt, 4), "acc": round(corr/cnt, 4)}
         # trajetoria completa (depth4) para readouts post-hoc
         for k in range(0, N, L * bs):
@@ -58,7 +59,7 @@ def main():
             y = torch.tensor(np.asarray([val[k+j+1:k+j+1+L] for j in range(0, L*len(xs), L)]),
                              dtype=torch.long, device=a.device)
             _, tr = m(x, causal=True, max_loops=4, return_trace=True)
-            traces.append((torch.stack(tr, 1).float().cpu(), y[:, -1].cpu()))
+            traces.append((torch.stack(tr, 1).float().cpu(), y[:, 0].cpu()))
     sweep = []
     for eps in EPS:
         vl = corr = cnt = depth_sum = 0
@@ -67,10 +68,12 @@ def main():
             p = lp.exp()
             kl = torch.zeros(p.shape[0], p.shape[1])
             for t in range(1, p.shape[1]):
-                kl[:, t] = (p[:, t] * (lp[:, t] - lp[:, t-1])).sum(-1)
+                # lgseq e' [B, loops, tokens, vocab]: soma sobre vocab e
+                # media sobre posicoes -> [B] (um KL por amostra e por loop)
+                kl[:, t] = (p[:, t] * (lp[:, t] - lp[:, t-1])).sum(-1).mean(1)
             exit_t = (kl < eps).float().argmax(1)
             exit_t = torch.where((kl < eps).any(1), exit_t, torch.ones_like(exit_t) * (p.shape[1]-1))
-            chosen = lgseq[torch.arange(p.shape[0]), exit_t]
+            chosen = lgseq[torch.arange(p.shape[0]), exit_t, -1, :]
             lpc = torch.log_softmax(chosen, -1)
             vl += float(-lpc.gather(1, yy[:, None]).sum())
             corr += int((lpc.argmax(-1) == yy).sum()); cnt += yy.numel(); depth_sum += int(exit_t.sum()) + 1
