@@ -47,8 +47,9 @@ def main():
                                  dtype=torch.long, device=a.device)
                 lg, tr = m(x, causal=True, max_loops=t, return_trace=True)
                 lp = torch.log_softmax(lg[:, -1, :].float(), -1)
-                # logits na ultima posicao preveem o PRIMEIRO token de y
-                vl += float(-lp.gather(1, y[:, :1]).sum()); corr += int((lp.argmax(-1)==y[:, 0]).sum()); cnt += y.shape[0]
+                # x = val[k:k+L]; y = val[k+1:k+1+L]; logits da ultima
+                # posicao preveem val[k+L] = y[:, -1]
+                vl += float(-lp.gather(1, y[:, -1:]).sum()); corr += int((lp.argmax(-1)==y[:, -1]).sum()); cnt += y.shape[0]
             forced[f"depth{t}"] = {"val_loss": round(vl/cnt, 4), "acc": round(corr/cnt, 4)}
         # trajetoria completa (depth4) para readouts post-hoc
         for k in range(0, N, L * bs):
@@ -59,7 +60,7 @@ def main():
             y = torch.tensor(np.asarray([val[k+j+1:k+j+1+L] for j in range(0, L*len(xs), L)]),
                              dtype=torch.long, device=a.device)
             _, tr = m(x, causal=True, max_loops=4, return_trace=True)
-            traces.append((torch.stack(tr, 1).float().cpu(), y[:, 0].cpu()))
+            traces.append((torch.stack(tr, 1).float().cpu(), y[:, -1].cpu()))
     sweep = []
     for eps in EPS:
         vl = corr = cnt = depth_sum = 0
