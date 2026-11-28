@@ -16,7 +16,10 @@ SEEDS = ("elastic latent recurrence loop index conditioning",
          "residual normalization massive activations stages",
          "mixture of loops transformer experts",
          "late entry looped language models",
-         "selective refinement implicit reasoning loop")
+         "selective refinement implicit reasoning loop",
+         "data constrained training repetition scaling law",
+         "staged data mixture web code math pretraining",
+         "strong weight decay overfitting unique tokens")
 COLLS = ("code_index", "books", "jarvis_test_frontier_2026_11")
 KEY = ("loop", "depth", "cache", "context", "compress", "token", "norm",
        "residual", "attention", "mlp", "speculative", "draft", "entropy",

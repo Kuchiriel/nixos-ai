@@ -7,12 +7,16 @@ Fluxo: arXiv -> dedup -> PDF -> texto -> RAG -> re-alien -> gate de novidade.
 import argparse, json, subprocess, time, urllib.parse, xml.etree.ElementTree as ET
 from pathlib import Path
 
-THEMES = ('(all:"elastic depth" OR abs:"looped transformer") AND cat:cs.CL',
-          '(abs:"halting" AND abs:"looped") AND cat:cs.CL',
-          '(abs:"speculative decoding" AND abs:"looped") AND cat:cs.CL',
-          '(abs:"byte-level" AND abs:"tokenization") AND cat:cs.CL',
-          '(abs:"educational corpus" OR abs:"data curation") AND cat:cs.CL',
-          '(abs:"residual normalization" OR abs:"massive activations") AND cat:cs.CL')
+THEMES = (
+    '(abs:"data constrained" OR abs:"repetition" AND abs:"scaling law") AND cat:cs.CL',
+    '(abs:"data mixture" AND abs:"staged pretraining") AND cat:cs.CL',
+    '(abs:"weight decay" AND abs:"overfitting") AND cat:cs.CL',
+    '(all:"elastic depth" OR abs:"looped transformer") AND cat:cs.CL',
+    '(abs:"halting" AND abs:"looped") AND cat:cs.CL',
+    '(abs:"speculative decoding" AND abs:"looped") AND cat:cs.CL',
+    '(abs:"byte-level" AND abs:"tokenization") AND cat:cs.CL',
+    '(abs:"educational corpus" OR abs:"data curation") AND cat:cs.CL',
+    '(abs:"residual normalization" OR abs:"massive activations") AND cat:cs.CL')
 NS = {"a": "http://www.w3.org/2005/Atom"}
 DIR = Path("/home/nixos/Books/papers/frontier-2026-11-27")
 
