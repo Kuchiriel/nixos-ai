@@ -26,5 +26,11 @@ const MACH_STAGES=[
  {id:'f161-itq-d768',date:'28/11',label:'F161 · ITQ d768',d:768,params:null,val:2.5774,acc:0.2803,steps:240,corpus:'TinyStories bytes',note:'ortho_err=84.99385'},
  {id:'f162-itq-d192',date:'28/11',label:'F162 · ITQ d192',d:192,params:null,val:2.9038,acc:0.207,steps:240,corpus:'TinyStories bytes',note:'ortho_err=0.0'},
  {id:'f162-itq-d384',date:'28/11',label:'F162 · ITQ d384',d:384,params:null,val:3.0444,acc:0.1895,steps:240,corpus:'TinyStories bytes',note:'ortho_err=0.0'},
- {id:'f162-itq-d768',date:'28/11',label:'F162 · ITQ d768',d:768,params:null,val:2.9502,acc:0.2217,steps:240,corpus:'TinyStories bytes',note:'ortho_err=0.0'}
+ {id:'f162-itq-d768',date:'28/11',label:'F162 · ITQ d768',d:768,params:null,val:2.9502,acc:0.2217,steps:240,corpus:'TinyStories bytes',note:'ortho_err=0.0'},
+ {id:'f163-binary-d192',date:'28/11',label:'F163 · binary BPE d192',d:192,params:null,val:5.2634,acc:0.1309,steps:240,corpus:'SimpleStories BPE vocab 10000',note:'ortho_err=None'},
+ {id:'f163-itq-d192',date:'28/11',label:'F163 · itq BPE d192',d:192,params:null,val:5.8013,acc:0.0801,steps:240,corpus:'SimpleStories BPE vocab 10000',note:'ortho_err=0.0'},
+ {id:'f163-binary-d384',date:'28/11',label:'F163 · binary BPE d384',d:384,params:null,val:5.4892,acc:0.1279,steps:240,corpus:'SimpleStories BPE vocab 10000',note:'ortho_err=None'},
+ {id:'f163-itq-d384',date:'28/11',label:'F163 · itq BPE d384',d:384,params:null,val:6.067,acc:0.1064,steps:240,corpus:'SimpleStories BPE vocab 10000',note:'ortho_err=0.0'},
+ {id:'f163-binary-d768',date:'28/11',label:'F163 · binary BPE d768',d:768,params:null,val:5.9247,acc:0.1357,steps:240,corpus:'SimpleStories BPE vocab 10000',note:'ortho_err=None'},
+ {id:'f163-itq-d768',date:'28/11',label:'F163 · itq BPE d768',d:768,params:null,val:6.4424,acc:0.0635,steps:240,corpus:'SimpleStories BPE vocab 10000',note:'ortho_err=0.0'}
 ];

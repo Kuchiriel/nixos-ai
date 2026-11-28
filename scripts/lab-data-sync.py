@@ -99,6 +99,15 @@ def main() -> int:
                 x['d'], x['itq']['val_loss'], x['itq']['acc'], r.get('steps'), None,
                 x['itq']['seconds'], 'TinyStories bytes',
                 'ortho_err=' + str(x['itq'].get('ortho_err')))
+    r = load(B / 'f163-itq-bpe.json')
+    if r:
+        for x in r.get('results', []):
+            for arm in ('binary', 'itq'):
+                v = x[arm]
+                add(stages, f"f163-{arm}-d{x['d']}", f"F163 · {arm} BPE d{x['d']}",
+                    x['d'], v['val_loss'], v['acc'], r.get('steps'), None,
+                    v['seconds'], 'SimpleStories BPE vocab 10000',
+                    'ortho_err=' + str(v.get('ortho_err')))
     seen, uniq = set(), []
     for s in stages:
         if s['id'] not in seen:
