@@ -75,6 +75,31 @@ def availability_proxy(paths: set[str], max_paths: int) -> float:
 def alien_score(coh: float, avail: float) -> float:
     return round(coh * (1.0 - avail), 3)
 
+def bootstrap():
+    """Auto-conserto de invocacao (medido 28/11, mesmo padrao dos outros
+    alien-sampling-*): sem venv/PYTHONPATH o script morre com
+    'No module named jarvis'. Re-execa com ~/.venvs/lab + src do jarvis."""
+    import os
+    import sys
+    if os.environ.get("ALIEN_BOOTSTRAPPED"):
+        return
+    try:
+        import requests  # noqa: F401
+        sys.path.insert(0, os.path.expanduser(
+            "~/projects/nixos-ai/modules/ai/jarvis/src"))
+        import jarvis.core.rag  # noqa: F401
+        return
+    except Exception:
+        pass
+    venv = os.path.expanduser("~/.venvs/lab/bin/python")
+    src = os.path.expanduser("~/projects/nixos-ai/modules/ai/jarvis/src")
+    if os.path.exists(venv):
+        env = dict(os.environ, ALIEN_BOOTSTRAPPED="1")
+        old = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = src + (":" + old if old else "")
+        os.execve(venv, [venv] + sys.argv, env)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -91,6 +116,7 @@ def main():
         print(json.dumps(res, ensure_ascii=False))
         return
 
+    bootstrap()
     from jarvis.core.rag import HybridSearch
     hs = HybridSearch()
 
