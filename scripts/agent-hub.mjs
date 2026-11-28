@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Agent Hub — mission control do opencode no nitro-v15.
+// Agent Hub — mission control do opencode no host local.
 // Autossuficiente: só node 24 + filesystem. Serve em 127.0.0.1:8091.
 // Rotas:
 //   GET  /                          -> página (self-contained)
@@ -13,6 +13,8 @@ import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { hostname } from 'node:os';
+const HUB_HOSTNAME = process.env.HUB_HOSTNAME || hostname() || "host";
 import { dirname, join } from 'node:path';
 const HOME = process.env.HOME;
 // (16/11) A UI saiu do corpo do .mjs para um arquivo proprio: 39 KB de
@@ -176,7 +178,7 @@ async function wake(name, text) {
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 const HTML = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Agent Hub — nitro-v15</title>
+<title>Agent Hub — </title>
 <style>
 :root { color-scheme: dark; --bg:#0d1117; --card:#161b22; --line:#30363d; --acc:#7ee787; --warn:#f0c674; --bad:#ff7b72; --idx:#58a6ff; }
 * { box-sizing:border-box; }
@@ -207,7 +209,7 @@ pre { background:#0d1117; border:1px solid var(--line); border-radius:6px; paddi
 .busline .kind { color:var(--warn); }
 .busline .ts { color:#8b949e; margin-right:6px; }
 </style></head><body>
-<header><h1>🤖 AGENT HUB <span class="muted">nitro-v15</span></h1>
+<header><h1>🤖 AGENT HUB <span class="muted"></span></h1>
 <input id="tok" type="password" placeholder="token do hub" style="max-width:220px">
 <button id="tokSave">salvar</button><span id="hud">conectando…</span></header>
 <main>

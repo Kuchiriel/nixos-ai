@@ -26,7 +26,7 @@ set -euo pipefail
 # ═══ Configuration ═══
 
 FLAKE_DIR="${FLAKE_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
-TARGET_HOST="${TARGET_HOST:-nitro-v15}"
+TARGET_HOST="${TARGET_HOST:-$(hostname)}"
 QUICK=false
 HOST_ONLY=false
 VERBOSE=false

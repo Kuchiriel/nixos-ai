@@ -21,7 +21,7 @@
 set -euo pipefail
 
 MODE="${1:?uso: safe-nixos-apply.sh <build|test|switch> [hostname]}"
-HOSTNAME="${2:-nitro-v15}"
+HOSTNAME="${2:-$(hostname)}"
 LLAMA_URL="http://127.0.0.1:8080"
 LOG="NIGHTLOG.md"
 MAX_WAIT_IDLE=120   # segundos esperando slot livre antes de desistir desta tentativa
