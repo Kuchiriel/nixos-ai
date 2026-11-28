@@ -90,11 +90,13 @@ def main() -> int:
                 r.get('val_loss'), r.get('acc'), r.get('steps'),
                 r.get('vram_bytes'), r.get('seconds'),
                 'SimpleStories ownremap 210M', 'seq4096 — gate F98')
-    r = load(B / 'f161-itq.json')
-    if r:
+    for tag in ('f161-itq', 'f162-itq'):
+        r = load(B / f'{tag}.json')
+        if not r:
+            continue
         for x in r.get('results', []):
-            add(stages, f"f161-itq-d{x['d']}", f"F161 · ITQ d{x['d']}", x['d'],
-                x['itq']['val_loss'], x['itq']['acc'], r.get('steps'), None,
+            add(stages, f"{tag}-d{x['d']}", f"{'F161' if tag.startswith('f161') else 'F162'} · ITQ d{x['d']}",
+                x['d'], x['itq']['val_loss'], x['itq']['acc'], r.get('steps'), None,
                 x['itq']['seconds'], 'TinyStories bytes',
                 'ortho_err=' + str(x['itq'].get('ortho_err')))
     seen, uniq = set(), []

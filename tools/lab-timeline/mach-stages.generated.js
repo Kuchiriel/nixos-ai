@@ -23,5 +23,8 @@ const MACH_STAGES=[
  {id:'f159-alibi',date:'28/11',label:'F159 · ALiBi seq1024',d:384,params:null,val:4.6721,acc:0.2422,steps:9600,corpus:'SimpleStories ownremap 210M',note:'numero lido do JSON da frente'},
  {id:'f161-itq-d192',date:'28/11',label:'F161 · ITQ d192',d:192,params:null,val:2.5367,acc:0.2803,steps:240,corpus:'TinyStories bytes',note:'ortho_err=147.52989'},
  {id:'f161-itq-d384',date:'28/11',label:'F161 · ITQ d384',d:384,params:null,val:2.5721,acc:0.2988,steps:240,corpus:'TinyStories bytes',note:'ortho_err=153.89412'},
- {id:'f161-itq-d768',date:'28/11',label:'F161 · ITQ d768',d:768,params:null,val:2.5774,acc:0.2803,steps:240,corpus:'TinyStories bytes',note:'ortho_err=84.99385'}
+ {id:'f161-itq-d768',date:'28/11',label:'F161 · ITQ d768',d:768,params:null,val:2.5774,acc:0.2803,steps:240,corpus:'TinyStories bytes',note:'ortho_err=84.99385'},
+ {id:'f162-itq-d192',date:'28/11',label:'F162 · ITQ d192',d:192,params:null,val:2.9038,acc:0.207,steps:240,corpus:'TinyStories bytes',note:'ortho_err=0.0'},
+ {id:'f162-itq-d384',date:'28/11',label:'F162 · ITQ d384',d:384,params:null,val:3.0444,acc:0.1895,steps:240,corpus:'TinyStories bytes',note:'ortho_err=0.0'},
+ {id:'f162-itq-d768',date:'28/11',label:'F162 · ITQ d768',d:768,params:null,val:2.9502,acc:0.2217,steps:240,corpus:'TinyStories bytes',note:'ortho_err=0.0'}
 ];

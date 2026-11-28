@@ -129,9 +129,7 @@
     "acc": null,
     "steps": null,
     "corpus": "lab-facts.json",
-    "note": "<=1.5",
-    "vram": null,
-    "seconds": null
+    "note": "<=1.5"
   },
   {
     "id": "f86-h3-20k",
@@ -143,9 +141,7 @@
     "acc": null,
     "steps": null,
     "corpus": "lab-facts.json",
-    "note": "<=1.5999",
-    "vram": null,
-    "seconds": null
+    "note": "<=1.5999"
   },
   {
     "id": "f69-compressao-dedup8",
@@ -157,9 +153,7 @@
     "acc": null,
     "steps": null,
     "corpus": "lab-facts.json",
-    "note": "<1.95",
-    "vram": null,
-    "seconds": null
+    "note": "<1.95"
   },
   {
     "id": "f96-kv-nao-binding",
@@ -171,9 +165,7 @@
     "acc": null,
     "steps": null,
     "corpus": "lab-facts.json",
-    "note": ">=25% da VRAM",
-    "vram": null,
-    "seconds": null
+    "note": ">=25% da VRAM"
   },
   {
     "id": "f102-byte-eot",
@@ -185,9 +177,7 @@
     "acc": null,
     "steps": null,
     "corpus": "lab-facts.json",
-    "note": "val<=2.05 em 19.660.800 tokens vistos E custo de logits<=1/5 do baseline",
-    "vram": null,
-    "seconds": null
+    "note": "val<=2.05 em 19.660.800 tokens vistos E custo de logits<=1/5 do baseline"
   },
   {
     "id": "f106-weight-entropy",
@@ -199,9 +189,7 @@
     "acc": null,
     "steps": null,
     "corpus": "lab-facts.json",
-    "note": "<=24 bits/peso e 2/3 grupos + decode<=10% do tempo/token",
-    "vram": null,
-    "seconds": null
+    "note": "<=24 bits/peso e 2/3 grupos + decode<=10% do tempo/token"
   },
   {
     "id": "f118-corpus-escada",
@@ -213,9 +201,7 @@
     "acc": null,
     "steps": null,
     "corpus": "lab-facts.json",
-    "note": "val<=1.9762",
-    "vram": null,
-    "seconds": null
+    "note": "val<=1.9762"
   },
   {
     "id": "f154",
@@ -227,9 +213,7 @@
     "acc": 0.5647,
     "steps": 38400,
     "corpus": "SimpleStories ownremap 210M",
-    "note": "numero lido do JSON da frente",
-    "vram": 4555386368,
-    "seconds": 7276.1
+    "note": "numero lido do JSON da frente"
   },
   {
     "id": "f156",
@@ -241,9 +225,7 @@
     "acc": 0.5434,
     "steps": 9600,
     "corpus": "SimpleStories ownremap 210M",
-    "note": "numero lido do JSON da frente",
-    "vram": 3461564416,
-    "seconds": 2886.4
+    "note": "numero lido do JSON da frente"
   },
   {
     "id": "f159-learned",
@@ -255,9 +237,7 @@
     "acc": 0.1885,
     "steps": 9600,
     "corpus": "SimpleStories ownremap 210M",
-    "note": "numero lido do JSON da frente",
-    "vram": null,
-    "seconds": 106.4
+    "note": "numero lido do JSON da frente"
   },
   {
     "id": "f159-rope",
@@ -269,9 +249,7 @@
     "acc": 0.2006,
     "steps": 9600,
     "corpus": "SimpleStories ownremap 210M",
-    "note": "numero lido do JSON da frente",
-    "vram": null,
-    "seconds": 101.7
+    "note": "numero lido do JSON da frente"
   },
   {
     "id": "f159-alibi",
@@ -283,9 +261,7 @@
     "acc": 0.2422,
     "steps": 9600,
     "corpus": "SimpleStories ownremap 210M",
-    "note": "numero lido do JSON da frente",
-    "vram": null,
-    "seconds": 98.7
+    "note": "numero lido do JSON da frente"
   },
   {
     "id": "f161-itq-d192",
@@ -297,9 +273,7 @@
     "acc": 0.2803,
     "steps": 240,
     "corpus": "TinyStories bytes",
-    "note": "ortho_err=147.52989",
-    "vram": null,
-    "seconds": 2.0
+    "note": "ortho_err=147.52989"
   },
   {
     "id": "f161-itq-d384",
@@ -311,9 +285,7 @@
     "acc": 0.2988,
     "steps": 240,
     "corpus": "TinyStories bytes",
-    "note": "ortho_err=153.89412",
-    "vram": null,
-    "seconds": 3.0
+    "note": "ortho_err=153.89412"
   },
   {
     "id": "f161-itq-d768",
@@ -325,8 +297,48 @@
     "acc": 0.2803,
     "steps": 240,
     "corpus": "TinyStories bytes",
-    "note": "ortho_err=84.99385",
+    "note": "ortho_err=84.99385"
+  },
+  {
+    "id": "f162-itq-d192",
+    "date": "28/11",
+    "label": "F162 · ITQ d192",
+    "d": 192,
+    "params": null,
+    "val": 2.9038,
+    "acc": 0.207,
+    "steps": 240,
+    "corpus": "TinyStories bytes",
+    "note": "ortho_err=0.0",
     "vram": null,
-    "seconds": 10.3
+    "seconds": 42.9
+  },
+  {
+    "id": "f162-itq-d384",
+    "date": "28/11",
+    "label": "F162 · ITQ d384",
+    "d": 384,
+    "params": null,
+    "val": 3.0444,
+    "acc": 0.1895,
+    "steps": 240,
+    "corpus": "TinyStories bytes",
+    "note": "ortho_err=0.0",
+    "vram": null,
+    "seconds": 7.1
+  },
+  {
+    "id": "f162-itq-d768",
+    "date": "28/11",
+    "label": "F162 · ITQ d768",
+    "d": 768,
+    "params": null,
+    "val": 2.9502,
+    "acc": 0.2217,
+    "steps": 240,
+    "corpus": "TinyStories bytes",
+    "note": "ortho_err=0.0",
+    "vram": null,
+    "seconds": 13.2
   }
 ]
