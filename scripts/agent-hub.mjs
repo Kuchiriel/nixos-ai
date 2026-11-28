@@ -69,7 +69,7 @@ let sessionCache = { at: 0, map: new Map() };
 async function sessions() {
   const now = Date.now();
   if (now - sessionCache.at < 3000) return sessionCache.map;
-  const r = await fetch(OC + '/api/session', { headers: { Authorization: AUTH() }, signal: AbortSignal.timeout(8000) });
+  const r = await fetch(OC + 'api/session', { headers: { Authorization: AUTH() }, signal: AbortSignal.timeout(8000) });
   const list = await r.json().catch(() => []);
   const map = new Map();
   for (const s of Array.isArray(list) ? list : (list.data || [])) map.set(s.id, s);
@@ -248,7 +248,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const now = () => new Date().toLocaleTimeString('pt-BR');
 const TOKEN = () => localStorage.getItem('hubToken') || '';
 async function fetchAgents() {
-  try { return await (await fetch('/api/agents', { headers: { 'x-agent-hub-token': TOKEN() } })).json(); } catch (e) { return { servers: { opencode: false }, agents: [] }; }
+  try { return await (await fetch('api/agents', { headers: { 'x-agent-hub-token': TOKEN() } })).json(); } catch (e) { return { servers: { opencode: false }, agents: [] }; }
 }
 $('#tok').value = TOKEN();
 $('#tokSave').addEventListener('click', () => { localStorage.setItem('hubToken', $('#tok').value.trim()); refresh(); });
@@ -267,7 +267,7 @@ async function refresh() {
     send.addEventListener('click', async () => {
       const t = say.value.trim(); if (!t) return;
       send.disabled = true; say.disabled = true;
-      const r = await fetch('/api/wake', { method: 'POST', headers: {'Content-Type': 'application/json','x-agent-hub-token':TOKEN()}, body: JSON.stringify({ name: $('.name', card).textContent, text: t }) });
+      const r = await fetch('api/wake', { method: 'POST', headers: {'Content-Type': 'application/json','x-agent-hub-token':TOKEN()}, body: JSON.stringify({ name: $('.name', card).textContent, text: t }) });
       say.value = r.ok ? '(enviado)' : '(falhou)';
       setTimeout(() => { say.value = ''; send.disabled = false; say.disabled = false; }, 1200);
     });
@@ -278,7 +278,7 @@ async function openTranscript(session, btn) {
   t.style.display = 'block'; d.style.display = 'block'; n.textContent = session.slice(0, 18);
   t.textContent = 'carregando…';
   try {
-    const r = await fetch('/api/transcript?session=' + encodeURIComponent(session), { headers: { 'x-agent-hub-token': TOKEN() } });
+    const r = await fetch('api/transcript?session=' + encodeURIComponent(session), { headers: { 'x-agent-hub-token': TOKEN() } });
     const d2 = await r.json();
     t.textContent = d2.lines.join('\\n\\n');
   } catch (e) { t.textContent = 'erro ao ler: ' + e; }
@@ -291,7 +291,7 @@ document.addEventListener('click', async (e) => {
   const sid = b.dataset.session;
   if (!sid || !confirm('Fechar a sessao de ' + (b.dataset.name || sid.slice(0, 8)) + '? (o historico fica no DB)')) return;
   try {
-    const r = await fetch('/api/session/close', { method: 'POST',
+    const r = await fetch('api/session/close', { method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-agent-hub-token': TOKEN() },
       body: JSON.stringify({ session: sid }) });
     const d = await r.json();
@@ -303,7 +303,7 @@ async function loadModels() {
   const sel = document.getElementById('spModel');
   if (!sel) return;
   try {
-    const d = await (await fetch('/api/models')).json();
+    const d = await (await fetch('api/models')).json();
     const groups = [];
     const rt = d.redteam_candidates || [];
     if (rt.length) {
@@ -328,7 +328,7 @@ async function doSpawn() {
   if (!task) { out.textContent = 'descreva a tarefa'; return; }
   out.textContent = 'criando… (pode levar ~1-2 min)';
   try {
-    const r = await fetch('/api/spawn', {
+    const r = await fetch('api/spawn', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-agent-hub-token': TOKEN_FIELD.value },
       body: JSON.stringify({
         task: task,
@@ -347,7 +347,7 @@ async function refreshState() {
   const sum = document.getElementById('stSum'), box = document.getElementById('stBox');
   if (!sum) return;
   try {
-    const d = await (await fetch('/api/state')).json();
+    const d = await (await fetch('api/state')).json();
     const ag = d.agentes || [], sp = d.spawns || [], sv = d.servicos || {};
     const up = Object.values(sv).filter(v => v === 'active').length;
     sum.textContent = ag.length + ' agentes · ' + (d.board?.claims || []).length + ' claims · '
@@ -361,7 +361,7 @@ async function refreshAB() {
   const sum = document.getElementById('abSum'), out = document.getElementById('abOut');
   if (!sum) return;
   try {
-    const d = await (await fetch('/api/dungeon-ab')).json();
+    const d = await (await fetch('api/dungeon-ab')).json();
     const linhas = [];
     for (const [modelo, tasks] of Object.entries(d.modelos || {})) {
       for (const t of (tasks || [])) {
@@ -378,7 +378,7 @@ async function runAB() {
   const sum = document.getElementById('abSum');
   if (sum) sum.textContent = 'rodando (o harness vai executar a task na fila)...';
   for (const m of ['bonsai', 'mtp']) {
-    await fetch('/api/dungeon-ab?model=' + m, { method: 'POST' });
+    await fetch('api/dungeon-ab?model=' + m, { method: 'POST' });
   }
   setTimeout(refreshAB, 3000);
 }
@@ -386,7 +386,7 @@ async function refreshBus() {
   const el = document.getElementById('bus');
   if (!el) return;
   try {
-    const r = await fetch('/api/bus?limit=40');
+    const r = await fetch('api/bus?limit=40');
     const d = await r.json();
     if (!d.items || !d.items.length) {
       el.textContent = d.err ? ('bus indisponível: ' + d.err) : 'sem mensagens coord-json no bus (ainda)';
@@ -1274,7 +1274,7 @@ async function handler(req, res) {
       failures,
       recentEvents,
       chief,
-      links: { lab:'/lab', house:'/house', agents:'/api/agents', bus:'/api/bus?limit=40', tasks:'/api/tasks' },
+      links: { lab:'lab', house:'/house', agents:'api/agents', bus:'api/bus?limit=40', tasks:'api/tasks' },
       papers: { note:'AgentGUI/AgentOps/AgentSysOps/GovernanceTelemetry + Lacuna alien-sampling (2603.01092) indexed in host Books/RAG' }
     };
     return send(200, JSON.stringify(summary), 'application/json');
@@ -1588,7 +1588,7 @@ async function handler(req, res) {
         sid = a?.session || '';
       }
       if (!sid) return send(400, '{"ok":false,"error":"sem sessao para fechar"}', 'application/json');
-      const r = await fetch(OC + '/api/session/' + encodeURIComponent(sid), {
+      const r = await fetch(OC + 'api/session/' + encodeURIComponent(sid), {
         method: 'DELETE', headers: { Authorization: AUTH() },
         signal: AbortSignal.timeout(10000) });
       const body = await r.text();

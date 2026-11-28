@@ -1,4 +1,3 @@
-import os
 #!/usr/bin/env python3
 """Aggregate the fleet's real bus paths into one JSON feed for the hub.
 
@@ -10,6 +9,7 @@ Paths exposed (each item carries `path`):
 Read-only, bounded timeouts, no secrets. Called by agent-hub.mjs via pyJSON.
 """
 from __future__ import annotations
+import os
 
 import argparse
 import hashlib
@@ -24,7 +24,10 @@ from pathlib import Path
 HOME = Path.home()
 ISSUE = "Kuchiriel/mt5"
 GH_ISSUE = "100"
-MCP = os.environ.get("COORD_MCP_URL","http://127.0.0.1:8765/mcp")
+# MEDIDO 28/11: o coord-mcp escuta no IP da tailnet (100.121.100.103:8765 e o
+# IPv6), NAO em 127.0.0.1 — o default 127.0.0.1 dava Connection refused e o
+# Bus/Chat do hub ficavam sem os 2520 itens do caminho coord-mcp.
+MCP = os.environ.get("COORD_MCP_URL","http://100.121.100.103:8765/mcp")
 HUB_LOG = HOME / ".local/state/jarvis/hub-messages.jsonl"
 JOURNAL = HOME / ".local/state/jarvis/bus-journal"
 
