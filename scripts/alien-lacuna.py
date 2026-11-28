@@ -68,12 +68,22 @@ def main():
         k = re.sub(r"\W+", " ", x["atom"].lower()).strip()[:120]
         if k in keys: continue
         keys.add(k); uniq.append(x)
-    # direcoes locais por termo dominante
-    buckets = {"loop/depth": ("loop", "depth", "recurrent"),
-               "cache/context": ("cache", "context", "memory"),
-               "compression/tokenizer": ("compress", "token", "entropy"),
-               "curation": ("curriculum", "filter", "educational"),
-               "norm/stability": ("norm", "residual", "convergence")}
+    # F152: direcoes DERIVADAS dos atoms, nao fixas — termos tecnicos mais
+    # frequentes nos trechos recuperados; descarta direcoes com <2 atoms.
+    from collections import Counter
+    freq = Counter()
+    for x in uniq:
+        low = x["atom"].lower()
+        for t in KEY:
+            if t in low:
+                freq[t] += 1
+    buckets = {t: (t,) for t, c in freq.most_common(8) if c >= 2}
+    if len(buckets) < 3:
+        buckets = {"loop/depth": ("loop", "depth", "recurrent"),
+                   "cache/context": ("cache", "context", "memory"),
+                   "compression/tokenizer": ("compress", "token", "entropy"),
+                   "curation": ("curriculum", "filter", "educational"),
+                   "norm/stability": ("norm", "residual", "convergence")}
     directions = {}
     for name, terms in buckets.items():
         ds = [x for x in uniq if any(t in x["atom"].lower() for t in terms)]
