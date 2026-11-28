@@ -44,5 +44,11 @@ const MACH_STAGES=[
  {id:'f165-corpus-binary-d192',date:'28/11',label:'F165 · binário 20M d192',d:192,params:null,val:5.262,acc:0.1538,steps:240,corpus:'TinyStories dedup8 20M',note:'gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes'},
  {id:'f165-corpus-binary-d384',date:'28/11',label:'F165 · binário 20M d384',d:384,params:null,val:5.3779,acc:0.1577,steps:240,corpus:'TinyStories dedup8 20M',note:'gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes'},
  {id:'f165-corpus-binary-d768',date:'28/11',label:'F165 · binário 20M d768',d:768,params:null,val:5.8774,acc:0.1394,steps:240,corpus:'TinyStories dedup8 20M',note:'gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes'},
- {id:'f160-alibi',date:'28/11',label:'F160 · alibi seq4096',d:384,params:null,val:5.0614,acc:0.2048,steps:4800,corpus:'SimpleStories ownremap 210M',note:'seq4096 — gate F98'}
+ {id:'f160-alibi',date:'28/11',label:'F160 · alibi seq4096',d:384,params:null,val:5.0614,acc:0.2048,steps:4800,corpus:'SimpleStories ownremap 210M',note:'seq4096 — gate F98'},
+ {id:'f166-binary-s42-d192',date:'28/11',label:'F166 · binário 960p s42 d192',d:192,params:null,val:5.9454,acc:0.092,steps:960,corpus:'TinyStories dedup8 20M',note:'gate 3/3x2 PASSOU — ganho pequeno e consistente'},
+ {id:'f166-binary-s42-d384',date:'28/11',label:'F166 · binário 960p s42 d384',d:384,params:null,val:5.7988,acc:0.1064,steps:960,corpus:'TinyStories dedup8 20M',note:'gate 3/3x2 PASSOU — ganho pequeno e consistente'},
+ {id:'f166-binary-s42-d768',date:'28/11',label:'F166 · binário 960p s42 d768',d:768,params:null,val:5.5909,acc:0.1304,steps:960,corpus:'TinyStories dedup8 20M',note:'gate 3/3x2 PASSOU — ganho pequeno e consistente'},
+ {id:'f166-binary-s43-d192',date:'28/11',label:'F166 · binário 960p s43 d192',d:192,params:null,val:5.9405,acc:0.092,steps:960,corpus:'TinyStories dedup8 20M',note:'gate 3/3x2 PASSOU — ganho pequeno e consistente'},
+ {id:'f166-binary-s43-d384',date:'28/11',label:'F166 · binário 960p s43 d384',d:384,params:null,val:5.7945,acc:0.1062,steps:960,corpus:'TinyStories dedup8 20M',note:'gate 3/3x2 PASSOU — ganho pequeno e consistente'},
+ {id:'f166-binary-s43-d768',date:'28/11',label:'F166 · binário 960p s43 d768',d:768,params:null,val:5.5915,acc:0.1301,steps:960,corpus:'TinyStories dedup8 20M',note:'gate 3/3x2 PASSOU — ganho pequeno e consistente'}
 ];

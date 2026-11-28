@@ -118,6 +118,14 @@ def main() -> int:
                     x['d'], v['val_loss'], v['acc'], r.get('steps'), None,
                     v['seconds'], 'SimpleStories BPE vocab 10000',
                     'ortho_err=' + str(v.get('ortho_err')))
+    r = load(B / 'f166-corpus.json')
+    if r:
+        for x in r.get('results', []):
+            add(stages, f"f166-binary-s{x['seed']}-d{x['d']}",
+                f"F166 · binário 960p s{x['seed']} d{x['d']}", x['d'],
+                x['binary']['val_loss'], x['binary']['acc'], r.get('steps'),
+                None, x['binary']['seconds'], 'TinyStories dedup8 20M',
+                'gate 3/3x2 PASSOU — ganho pequeno e consistente')
     seen, uniq = set(), []
     for s in stages:
         if s['id'] not in seen:
