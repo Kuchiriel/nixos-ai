@@ -15,7 +15,7 @@ from dataclasses import replace
 from pathlib import Path
 
 SRC = Path("/home/nixos/projects/ai-mesh")
-DST = Path("/home/nixos/work/hybrid/rag-docs")
+DST = Path("/tmp/rag-docs-ai-mesh")  # _safe_path so aceita projeto ou /tmp
 DEFAULT_Q = "F149 hipercubo escala seed43 d1216 gate"
 
 
