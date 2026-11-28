@@ -45,6 +45,13 @@
    to measure if another `llama-server` is alive (contention once cost an
    entire investigation into a nonexistent "bimodal").
 
+## Identidade v1 (28/11/2026) — contrato da frota
+
+- **Não existe codinome canônico fixo de sessão.** Use `agent-codename --json` => `<acao>-<escopo>-<capacidade>`. Identidade = `agent/codename + session + llm.provider/model/variant + lane + scope`.
+- Modelo/sessão dinâmicos: descubra antes de afirmar. `crouton-alpha`/hostname/lane não são identidade de sessão.
+- Contrato: `~/projects/ai-mesh/docs/contracts/identity-v1.md` (ou `ai-mesh/docs/contracts/identity-v1.md`). Bus/coord/auto-wake usam codename da sessão; tarefa só com marcador explícito da própria lane.
+- Papers: baixar em `~/Books/papers/<tema-YYYY-MM-DD>/` no host e indexar no RAG antes de citar como base.
+
 ## Commands
 
 ```bash

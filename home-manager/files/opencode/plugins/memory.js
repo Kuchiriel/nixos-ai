@@ -53,6 +53,11 @@ const VIS_SESSION_FILE = VIS_STATE_DIR + "/vis-session";
 const VIS_MAX_PER_HOUR = parseInt(process.env.VIS_MAX_PER_HOUR || "12", 10);
 const VIS_MIN_GAP_MIN = parseInt(process.env.VIS_MIN_GAP_MIN || "3", 10);
 
+// Direct agent-to-agent messages (actionable). Written by agent-api/agent-msg;
+// drained here on idle so messages are injected even if API steer was missed.
+const DIRECT_MSG_FILE = VIS_STATE_DIR + "/direct-msg.jsonl";
+const DIRECT_MSG_SEEN = VIS_STATE_DIR + "/direct-msg-seen.json";
+
 function visRun(cmd, timeoutMs = 12000) {
   try {
     return execFileSync("bash", cmd, {
@@ -400,22 +405,72 @@ export default {
       }
     });
 
-    // ── VISIBILIDADE: injetar comunicacoes pendentes na sessao ociosa ──
-    // Igual ao Termux @teste-visivel: quando a sessao fica ociosa, injetamos
-    // comunicacoes pendentes direto na sessao via ctx.session.synthetic().
-    // Nada de bus, nada de MCP coord_msg — tudo visivel na janela do dono.
+    function directMsgReadAll() {
+      try {
+        if (!existsSync(DIRECT_MSG_FILE)) return [];
+        return readFileSync(DIRECT_MSG_FILE, "utf8").split("\n").filter(Boolean).map(l => {
+          try { return JSON.parse(l); } catch { return null; }
+        }).filter(Boolean);
+      } catch { return []; }
+    }
+    function directMsgSeenLoad() {
+      try { return JSON.parse(readFileSync(DIRECT_MSG_SEEN, "utf8")); } catch { return {}; }
+    }
+    function directMsgSeenSave(d) {
+      try { mkdirSync(VIS_STATE_DIR, { recursive: true }); writeFileSync(DIRECT_MSG_SEEN, JSON.stringify(d)); } catch {}
+    }
+    function directMsgDrainForSession(sid) {
+      const all = directMsgReadAll();
+      if (all.length === 0) return [];
+      const seen = directMsgSeenLoad();
+      const now = Date.now();
+      for (const k of Object.keys(seen)) { if (now - Number(seen[k] || 0) > 6 * 3600000) delete seen[k]; }
+      const mine = [];
+      const keep = [];
+      for (const m of all) {
+        const to = String(m.to || m.session || "");
+        const id = String(m.id || "");
+        if (to !== sid) { keep.push(m); continue; }
+        if (id && seen[id]) { continue; }
+        mine.push(m);
+        if (id) seen[id] = now;
+      }
+      if (mine.length > 0 || keep.length !== all.length) {
+        try {
+          mkdirSync(VIS_STATE_DIR, { recursive: true });
+          writeFileSync(DIRECT_MSG_FILE, keep.map(x => JSON.stringify(x)).join("\n") + (keep.length ? "\n" : ""));
+        } catch {}
+        directMsgSeenSave(seen);
+      }
+      return mine;
+    }
+
+    // ── VISIBILIDADE + DIRECT MSG: injetar na sessao ociosa ──
     await ctx.session.hook("experimental.idle", async (event) => {
       try {
         const sid = event?.sessionID || "";
         if (!sid) return;
-        // so a sessao declarada como alvo (a do dono) recebe; sem alvo, qualquer uma
+
+        // 1) Direct messages targeted at this session (actionable, not backlog)
+        try {
+          const msgs = directMsgDrainForSession(sid).slice(0, 3);
+          for (const m of msgs) {
+            const from = String(m.from || m.agent || "agente");
+            const model = String(m.model || "");
+            const kind = String(m.kind || "ask");
+            const text = String(m.text || "").slice(0, 4000);
+            const mid = String(m.id || "");
+            const header = `[DIRECT ${kind.toUpperCase()}] from=${from}${model ? ` model=${model}` : ""}${mid ? ` id=${mid}` : ""}`;
+            const ack = kind === "ask" ? "\n\nResponda com ACK curto + acao, ou motivo do bloqueio." : "";
+            await ctx.session.synthetic({ sessionID: sid, text: header + "\n" + text + ack });
+          }
+        } catch {}
+
+        // 2) Vis-queue for owner visible session (existing behavior)
         try {
           const alvo = readFileSync(VIS_SESSION_FILE, "utf8").trim();
           if (alvo && alvo !== sid) return;
         } catch { /* sem arquivo: comportamento antigo */ }
-        // (19/11, medido) A VERIFICACAO vem ANTES do gasto: um evento ocioso
-        // sem nada pendente consumia 1 das 12 injecoes/h e ainda bloqueava a
-        // proxima mensagem real pelo gap de 3 min (fila parada com item dentro).
         const pend = visAllPending();
         if (pend.length === 0) return;
         if (!visBudgetOk()) return;

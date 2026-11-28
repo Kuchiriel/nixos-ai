@@ -546,6 +546,71 @@ def cmd_set_context(args) -> int:
     return 1
 
 
+def _detect_self_identity() -> dict:
+    """Detecta identidade do runtime atual (model, session, host)."""
+    info = {"model": "", "session": "", "host": _host_info()}
+    info["session"] = os.environ.get("OPENCODE_SESSION_ID", "").strip() or _session_from_env()
+    info["model"] = os.environ.get("OPENCODE_MODEL", "").strip() or os.environ.get("AGENT_MODEL", "").strip()
+    if not info["model"] or not info["session"]:
+        try:
+            ocid = subprocess.run(
+                ["bash", "-lc", "command -v oc-identidade >/dev/null 2>&1 && oc-identidade --json || true"],
+                capture_output=True, text=True, timeout=8
+            ).stdout.strip()
+            if ocid.startswith("{"):
+                d = json.loads(ocid)
+                if not info["model"]:
+                    info["model"] = str(d.get("model") or d.get("llm") or "").strip()
+                if not info["session"]:
+                    info["session"] = str(d.get("session") or "").strip()
+        except Exception:
+            pass
+    return info
+
+
+def cmd_self(args) -> int:
+    """Auto-identificação: atualiza model/session/device no roster para este agente."""
+    name = (getattr(args, "name", "") or "").strip()
+    ident = _detect_self_identity()
+    with _Lock():
+        data = load()
+        target = None
+        if name:
+            target = next((e for e in data["agents"] if e.get("name") == name or e.get("codename") == name), None)
+        if target is None and ident.get("session"):
+            target = next((e for e in data["agents"] if e.get("session") == ident["session"]), None)
+        if target is None:
+            # try own window
+            own = own_window(agent_windows())
+            if own and own.get("session"):
+                target = next((e for e in data["agents"] if e.get("session") == own["session"]), None)
+        if target is None:
+            print(json.dumps({"error": "agente não encontrado no roster; faça claim primeiro", "detected": ident}, ensure_ascii=False))
+            return 1
+        if ident.get("model"):
+            target["model"] = ident["model"]
+        if ident.get("session"):
+            target["session"] = ident["session"]
+        if ident.get("host"):
+            target["host"] = ident["host"]
+            target["origin"] = f"{ident['host'].get('hostname','?')} ({ident['host'].get('kind','?')}/{ident['host'].get('arch','?')})"
+        target["heartbeat_at"] = int(time.time())
+        save(data)
+    out = {
+        "name": target.get("name"),
+        "codename": target.get("codename"),
+        "device": target.get("origin"),
+        "llm": target.get("model"),
+        "session": target.get("session"),
+        "lane": target.get("lane"),
+    }
+    if getattr(args, "json", False):
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+    else:
+        print(f"self: {out['codename']} ({out['name']}) dev={out['device']} llm={out['llm']} sess={out['session']}")
+    return 0
+
+
 def cmd_whoami(args) -> int:
     """Quem sou eu: codinome + identidade + contexto (o cartão de visita)."""
     data = load()
@@ -794,9 +859,12 @@ def cmd_list(args) -> int:
     if not rows:
         print("roster vazio (nenhum agente fez claim)")
     for r in sorted(rows, key=lambda x: x["name"]):
-        print(f"{r['state']:5} {r.get('codename') or '-':10} {r['name']:14} "
-              f"lane={r['lane'] or '-':22} repo={r['repo'] or '-':10} "
-              f"age={r['age_s']}s")
+        sess = (r.get('session') or '-') 
+        model = (r.get('model') or '-')
+        host = r.get('host') or {}
+        dev = r.get('origin') or (f"{host.get('hostname','?')}/{host.get('kind','?')}" if isinstance(host,dict) else '-')
+        print(f"{r['state']:5} {r.get('codename') or '-':10} {r['name']:14} LLM={model}")
+        print(f"      dev={dev}  sess={sess}  lane={r.get('lane') or '-'}  age={r['age_s']}s")
         if r.get("context"):
             print(f"      contexto: {r['context']}")
         if r.get("note"):
@@ -1016,6 +1084,11 @@ def main() -> int:
     p.add_argument("--name", required=True)
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_whoami)
+
+    p = sub.add_parser("self", help="auto-identifica este agente (model/session/device) no roster")
+    p.add_argument("--name", default="", help="nome/codinome (opcional; detecta pela sessão)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_self)
 
     p = sub.add_parser("prune", help="remove entradas mortas")
     p.set_defaults(func=cmd_prune)

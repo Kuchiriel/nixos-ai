@@ -42,6 +42,7 @@ estruturado (a claim) + verificação mecânica (colisão), não conversa.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -49,6 +50,7 @@ import shutil
 import socket
 import subprocess
 import time
+from pathlib import Path
 from typing import Any
 
 JSON_FENCE = re.compile(r"```coord-json\s*([\s\S]*?)```")
@@ -554,6 +556,41 @@ def _deliver_event_to_webui(topic: str, data: dict[str, Any]) -> None:
     except Exception:
         return ""
 
+_POST_DEDUPE_TTL_S = 180
+_POST_DEDUPE_PATH = Path(os.environ.get("COORD_POST_DEDUPE", str(Path.home() / ".cache/coord-post-dedupe.json")))
+
+
+def _post_dedupe_key(payload: dict) -> str:
+    raw = "|".join([
+        str(payload.get("kind","")), str(payload.get("agent","")), str(payload.get("to","")),
+        str(payload.get("lane","")), str(payload.get("intent","")), str(payload.get("note","")),
+    ])
+    return hashlib.sha256(raw.encode("utf-8", "ignore")).hexdigest()
+
+
+def _post_is_dup(key: str) -> bool:
+    try:
+        data = json.loads(_POST_DEDUPE_PATH.read_text(encoding="utf-8")) if _POST_DEDUPE_PATH.exists() else {}
+    except Exception:
+        data = {}
+    now = time.time()
+    data = {k:v for k,v in data.items() if isinstance(v,(int,float)) and now-float(v) < _POST_DEDUPE_TTL_S}
+    if key in data:
+        try:
+            _POST_DEDUPE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _POST_DEDUPE_PATH.write_text(json.dumps(data), encoding="utf-8")
+        except Exception:
+            pass
+        return True
+    data[key] = now
+    try:
+        _POST_DEDUPE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _POST_DEDUPE_PATH.write_text(json.dumps(data), encoding="utf-8")
+    except Exception:
+        pass
+    return False
+
+
 def post(
     kind: str = "claim",
     agent: str | None = None,
@@ -565,6 +602,7 @@ def post(
     head: str = "",
     to: str = "",
     model: str = "",
+    force: bool = False,
 ) -> str:
     """Publica uma claim/status/msg no bus (append-only) e devolve o issue usado.
 
@@ -588,6 +626,10 @@ def post(
         "head": head or "",
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+    dkey = _post_dedupe_key(payload)
+    if not force and _post_is_dup(dkey):
+        return (f"coord: {kind} de {payload['agent']} suprimido (dedupe {int(_POST_DEDUPE_TTL_S)}s, mesmo conteúdo)"
+                + (f" → {payload['to']}" if payload['to'] else ""))
     number = find_issue(create=True)
     body = (
         f"**{kind}** de `{payload['agent']}`"

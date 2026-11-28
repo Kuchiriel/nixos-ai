@@ -187,24 +187,25 @@ def roster_agents() -> list[dict[str, Any]]:
 
 
 def roster_text() -> str:
-    """Roster em texto: codinome · nome · origem/modelo/MBTI · lane · estado · contexto."""
+    """Roster em texto: dispositivo, codinome, LLM, session, lane, estado, contexto."""
     agents = roster_agents()
     if not agents:
         return ("roster vazio (ou agent-roster.py indisponível) — "
-                "reivindique com: agent-roster.py claim --name <N> --lane <L>")
-    lines = ["roster (codinome · nome · origem/modelo/MBTI · lane · estado · contexto):"]
+                "reivindique com: agent-roster.py claim --name <N> --lane <L> "
+                "--model <provider/model> --session <ses_...>")
+    lines = ["roster (codinome · nome · dispositivo · LLM · session · lane · estado · contexto):"]
     for entry in agents:
-        ident = []
-        if entry.get("origin"):
-            ident.append(entry.get("origin"))
-        if entry.get("model"):
-            ident.append(entry.get("model"))
-        if entry.get("mbti") or entry.get("persona"):
-            ident.append(f"{entry.get('mbti') or '-'}({entry.get('persona') or '-'})")
-        ident_s = " / ".join(ident) if ident else "-"
+        host = entry.get("host") or {}
+        device = entry.get("origin") or (
+            f"{host.get('hostname','?')} ({host.get('kind','?')}/{host.get('arch','?')})"
+            if isinstance(host, dict) and host else "-"
+        )
+        model = entry.get("model") or "-"
+        session = entry.get("session") or "-"
         lines.append(
             f"- {entry.get('codename') or '-'} · {entry.get('name')} · "
-            f"{ident_s} · {entry.get('lane') or '-'} · {entry.get('state') or '?'} · "
+            f"{device} · LLM={model} · sess={session} · "
+            f"lane={entry.get('lane') or '-'} · {entry.get('state') or '?'} · "
             f"{entry.get('context') or '(sem contexto)'}"
         )
     return "\n".join(lines)

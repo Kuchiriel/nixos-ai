@@ -437,10 +437,45 @@ if [ -f "$LOG" ] && grep -qF "| id=$MSG_ID |" "$LOG" && [ "$FORCE" -eq 0 ]; then
     echo "agent-msg: id '$MSG_ID' já existe no log (idempotência A2A) — use outro --id" >&2
     exit 5
 fi
+# dedupe por conteúdo (mesmo alvo+texto em janela curta) - evita loop de spam
+DEDUPE_KEY=""
+if [ "$FORCE" -eq 0 ]; then
+    DEDUPE_KEY=$(python3 - "$MODO" "$TEXTO" <<'PYDED'
+import hashlib, sys
+mode, text = sys.argv[1], sys.argv[2]
+norm = " ".join(text.split()).strip().lower()
+print(hashlib.sha256((mode+"|"+norm).encode("utf-8","ignore")).hexdigest()[:16])
+PYDED
+)
+    DEDUPE_FILE="/tmp/opencode/agent-msg-dedupe-${DEDUPE_KEY}.ts"
+    mkdir -p /tmp/opencode
+    if [ -f "$DEDUPE_FILE" ]; then
+        LAST=$(cat "$DEDUPE_FILE" 2>/dev/null || echo 0)
+        NOW=$(date +%s)
+        AGE=$((NOW - LAST))
+        if [ "$AGE" -lt 180 ]; then
+            echo "agent-msg: conteúdo duplicado para alvo '$MODO' há ${AGE}s (dedupe 180s) — use --force para reenviar" >&2
+            exit 0
+        fi
+    fi
+fi
 TEXTO_ESCAPED=$(printf '%s' "$TEXTO" | tr '\n' ' ')
-CABECALHO="[AGENT→AGENT] from $REMETENTE id $MSG_ID"
+# identidade do remetente (model/session) para auto-identificação
+REMETENTE_MODEL="${OPENCODE_MODEL:-${AGENT_MODEL:-}}"
+REMETENTE_SESS="${OPENCODE_SESSION_ID:-}"
+if [ -z "$REMETENTE_MODEL" ] || [ -z "$REMETENTE_SESS" ]; then
+    _ID_JSON=$(command -v oc-identidade >/dev/null 2>&1 && oc-identidade --json 2>/dev/null || true)
+    if [ -n "$_ID_JSON" ]; then
+        [ -z "$REMETENTE_MODEL" ] && REMETENTE_MODEL=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('model',''))" "$_ID_JSON" 2>/dev/null || true)
+        [ -z "$REMETENTE_SESS" ] && REMETENTE_SESS=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('session',''))" "$_ID_JSON" 2>/dev/null || true)
+    fi
+fi
+CABECALHO="[AGENT→AGENT] from $REMETENTE"
+[ -n "$REMETENTE_MODEL" ] && CABECALHO="$CABECALHO model=$REMETENTE_MODEL"
+[ -n "$REMETENTE_SESS" ] && CABECALHO="$CABECALHO sess=$REMETENTE_SESS"
+CABECALHO="$CABECALHO id $MSG_ID"
 [ -n "$REPLY_TO" ] && CABECALHO="$CABECALHO re:$REPLY_TO"
-[ "$NOTA" -eq 1 ] && CABECALHO="$CABECALHO note"
+[ "$NOTA" -eq 1 ] && CABECALHO="$CABECALHO note" || CABECALHO="$CABECALHO ask ack=required"
 TEXTO_FINAL="$CABECALHO: $TEXTO_ESCAPED"
 
 # ── entrega via API do opencode ───────────────────────────────────────
@@ -512,6 +547,7 @@ print(json.dumps({"parts": [{"type": "text", "text": sys.argv[1]}]}))' "$TEXTO_F
         printf '%s | %s | %s | %s(%s) | id=%s | re=%s | %s\n' \
             "$(date '+%d/%m %H:%M')" "$REMETENTE" "$TIPO" "$NOME_ALVO" "$END" \
             "$MSG_ID" "${REPLY_TO:--}" "$TEXTO_ESCAPED" >> "$LOG"
+        [ -n "${DEDUPE_KEY:-}" ] && date +%s > "/tmp/opencode/agent-msg-dedupe-${DEDUPE_KEY}.ts" || true
         vis_visible "$REMETENTE" "$TIPO" "$NOME_ALVO" "$TEXTO_ESCAPED" "$SESSAO"
         continue
     fi
@@ -532,6 +568,7 @@ print(send(to=sys.argv[1], message=sys.argv[2], agent=sys.argv[3], lane=sys.argv
     printf '%s | %s | %s | %s(%s) | id=%s | re=%s | %s\n' \
         "$(date '+%d/%m %H:%M')" "$REMETENTE" "bus" "$DESTINO_BUS" "$END" \
         "$MSG_ID" "${REPLY_TO:--}" "$TEXTO_ESCAPED" >> "$LOG"
+    [ -n "${DEDUPE_KEY:-}" ] && date +%s > "/tmp/opencode/agent-msg-dedupe-${DEDUPE_KEY}.ts" || true
     vis_visible "$REMETENTE" "bus" "$DESTINO_BUS" "$TEXTO_ESCAPED" ""
     continue
 

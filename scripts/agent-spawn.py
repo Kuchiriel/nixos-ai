@@ -563,6 +563,7 @@ def main() -> int:
                 codename = pick_codename(used)
             except Exception:
                 codename = f"spawn{len(agents) + 1}"
+            _host = {"kind":"linux","os":__import__("platform").system().lower(),"arch":__import__("platform").machine(),"hostname":__import__("socket").gethostname().split(".")[0]}
             entry = {
                 "name": name,
                 "codename": codename,
@@ -581,6 +582,8 @@ def main() -> int:
                 "model": model_id,
                 "mbti": persona.get("mbti") or "",
                 "persona": persona.get("id") or "",
+                "host": _host,
+                "origin": f"{_host.get('hostname','?')} ({_host.get('kind','?')}/{_host.get('arch','?')})",
                 "claimed_at": int(_time.time()),
                 "context_updated_at": int(_time.time()),
                 "heartbeat_at": int(_time.time()),

@@ -109,7 +109,9 @@ def _candidate_bases(base: str) -> list[str]:
 
 
 def _routes(base: str, session: str, text: str, note: bool):
-    novo = {"text": text, "delivery": "queue"}
+    # V2: queue = nota (não acorda), steer = pedido/ação (acorda execução)
+    delivery = "queue" if note else "steer"
+    novo = {"text": text, "delivery": delivery}
     return (
         (f"{base}/api/session/{session}/prompt", novo),
         # 2.x sem o prefixo (alguns builds) e 1.x com {parts, noReply}
@@ -118,6 +120,80 @@ def _routes(base: str, session: str, text: str, note: bool):
          {"parts": [{"type": "text", "text": text}], "noReply": bool(note)}),
         (f"{base}/session/{session}/prompt_async", {"text": text}),
     )
+
+
+
+def _enqueue_direct_msg(session: str, text: str) -> None:
+    """Fallback: grava msg direta para o plugin memory.js injetar via synthetic() no idle."""
+    import time as _t
+    state = Path.home() / ".local/state/jarvis"
+    state.mkdir(parents=True, exist_ok=True)
+    f = state / "direct-msg.jsonl"
+    # dedupe simples por session+hash
+    key = hashlib.sha256((session + "\n" + text).encode("utf-8", "ignore")).hexdigest()[:16]
+    try:
+        if f.exists():
+            tail = f.read_text(encoding="utf-8", errors="ignore").splitlines()[-200:]
+            if any(key in ln for ln in tail):
+                return
+    except Exception:
+        pass
+    from_name = os.environ.get("JARVIS_AGENT_NAME") or os.environ.get("AGENT_NAME") or "agent"
+    model = os.environ.get("OPENCODE_MODEL") or os.environ.get("AGENT_MODEL") or ""
+    if not model:
+        try:
+            ocid = subprocess.run(["bash","-lc","command -v oc-identidade >/dev/null 2>&1 && oc-identidade --json || true"],
+                                  capture_output=True,text=True,timeout=5).stdout.strip()
+            if ocid.startswith("{"):
+                model = str(json.loads(ocid).get("model") or "")
+        except Exception:
+            pass
+    entry = {
+        "id": f"dm-{int(_t.time())}-{key[:8]}",
+        "to": session, "from": from_name, "model": model,
+        "kind": "ask", "text": text[:4000], "ts": int(_t.time()),
+        "dedupe": key,
+    }
+    with f.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+def _promote_inbox_steer(base: str, session: str, timeout: int = 10) -> str:
+    """Best-effort: promove itens queued no inbox para steer (bug V2 conhecido)."""
+    promoted = 0
+    for b in _candidate_bases(base):
+        try:
+            req = urllib.request.Request(
+                f"{b}/api/session/{session}/inbox",
+                headers={"Authorization": _auth_header()},
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                items = json.loads(r.read().decode("utf-8", "ignore") or "[]")
+            if not isinstance(items, list):
+                continue
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                if str(it.get("delivery") or "").lower() != "queue":
+                    continue
+                iid = it.get("id") or it.get("inboxID") or it.get("inbox_id")
+                if not iid:
+                    continue
+                body = json.dumps({"delivery": "steer"}).encode()
+                preq = urllib.request.Request(
+                    f"{b}/api/session/{session}/inbox/{iid}",
+                    data=body, method="PATCH",
+                    headers={"Content-Type": "application/json", "Authorization": _auth_header()},
+                )
+                try:
+                    with urllib.request.urlopen(preq, timeout=timeout) as pr:
+                        if pr.status < 400:
+                            promoted += 1
+                except Exception:
+                    pass
+            if promoted:
+                return f"promoted={promoted}"
+        except Exception:
+            continue
+    return f"promoted={promoted}"
 
 
 # (09/11, sweep-2026-11) DEDUPE NA ENTREGA: o loop medido na casa vinha
@@ -254,6 +330,19 @@ def deliver(base: str, session: str, text: str, *, note: bool = False,
             try:
                 st, out = _post(url, payload, timeout=timeout)
                 _mark_delivered(_dpath, _dkey)
+                if not note and "/api/session/" in url and "/prompt" in url:
+                    try:
+                        promo = _promote_inbox_steer(base, session, timeout=min(10, timeout))
+                        if promo and promo != "promoted=0":
+                            out = f"{out} | {promo}"
+                    except Exception:
+                        pass
+                # fallback: enqueue for plugin synthetic injection on idle
+                if not note:
+                    try:
+                        _enqueue_direct_msg(session, text)
+                    except Exception:
+                        pass
                 return st, out
             except urllib.error.HTTPError as e:
                 body = (e.read() or b"")[:200].decode(errors="replace")

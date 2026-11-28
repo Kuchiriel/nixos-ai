@@ -255,7 +255,7 @@ async function refresh() {
   $('#grid').innerHTML = d.agents.map(a => \`<div class="card \${a.status==='ghost'?'ghost':''}">
       <div class="row"><span class="dot \${a.status}"></span><span class="name">\${esc(a.codename)}</span> <span class="muted">\${esc(a.name)}</span></div>
       <div class="muted">lane=\${esc(a.lane)} · \${a.status}\${a.busy ? ' · há ' + Math.round((Date.now()-a.busy/1)/1000) + 's ativo' : ''}</div>
-      <div class="muted" style="margin-top:4px">sessão \${esc((a.session||'ghost').slice(0,18))}…</div>
+      <div class="muted" style="margin-top:4px">model=\${esc(a.model||'-')} · sess=\${esc((a.session||'ghost').slice(0,18))}…</div>
       <div class="turn"><button onclick="openTranscript('\${esc(a.session)}', this)">transcript</button> <button class="closeSession" data-session="\${esc(a.session || '')}" data-name="\${esc(a.codename || a.name || '')}" title="fechar sessao">fechar</button></div>
       <div class="turn"><input placeholder="dizer algo para \${esc(a.codename)}…" class="say"><button class="send">↵</button></div>
     </div>\`).join('');
