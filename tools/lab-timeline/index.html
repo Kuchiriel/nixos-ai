@@ -36,14 +36,29 @@ input{background:#0d1117;color:#e6edf3;border:1px solid #30363d;padding:7px;bord
 const MACH_STAGES=[
  {id:'f10',date:'24/11',label:'F10 · 10M',d:320,params:16.4,val:2.9782,acc:0.3977,steps:2400,corpus:'TinyStories-valid',note:'Primeira prova de mecanismo: loop ajuda com limite de parâmetros.'},
  {id:'f35',date:'24/11',label:'F35 · 50M',d:704,params:62.1,val:2.3091,acc:0.4872,steps:9600,corpus:'TinyStories-valid',note:'Escada 10M→50M→150M: curva de escala, não conclusão.'},
- {id:'f43',date:'25/11',label:'F43 · 150M full',d:1216,params:167.0,val:1.9762,acc:0.5314,steps:9600,corpus:'TinyStories-full',note:'Baseline do gate F118 (vocab 10000).'},
- {id:'f47',date:'25/11',label:'F47 · early exit',d:1216,params:167.0,val:1.7037,acc:0.5745,steps:24000,corpus:'TinyStories-full',note:'Mais passos superam early exit simples.'},
- {id:'f52',date:'26/11',label:'F52 · 68k',d:1216,params:167.0,val:1.4859,acc:0.6128,steps:68000,corpus:'TinyStories-full',note:'Fronte do corpus curado antes de H3.'},
- {id:'f75',date:'26/11',label:'F75 · curado',d:1216,params:167.0,val:1.6749,acc:0.5722,steps:9600,corpus:'SimpleStories 210M',note:'Corpus curado bate volume com 7× menos passos.'},
- {id:'f79',date:'27/11',label:'F79 · 20k curado',d:1216,params:167.0,val:1.4789,acc:0.6050,steps:20000,corpus:'SimpleStories 210M',note:'H3 apoiada: 20k no curado vence 68k no volume.'},
- {id:'f138',date:'28/11',label:'F136→F138 · FineWeb',d:1216,params:167.0,val:null,acc:null,steps:9600,corpus:'FineWeb-Edu 1B (ids prontos)',note:'1B ids materializados com remap top-10000; val_loss PENDENTE de GPU.'},
+ {id:'f43',date:'25/11',label:'F43 · 150M full',d:1216,params:167,val:1.9762,acc:0.5314,steps:9600,corpus:'TinyStories-full',note:'Baseline do gate F118 (vocab 10000).'},
+ {id:'f47',date:'25/11',label:'F47 · early exit',d:1216,params:167,val:1.7037,acc:0.5745,steps:24000,corpus:'TinyStories-full',note:'Mais passos superam early exit simples.'},
+ {id:'f52',date:'26/11',label:'F52 · 68k',d:1216,params:167,val:1.4859,acc:0.6128,steps:68000,corpus:'TinyStories-full',note:'Fronte do corpus curado antes de H3.'},
+ {id:'f75',date:'26/11',label:'F75 · curado',d:1216,params:167,val:1.6749,acc:0.5722,steps:9600,corpus:'SimpleStories 210M',note:'Corpus curado bate volume com 7× menos passos.'},
+ {id:'f79',date:'27/11',label:'F79 · 20k curado',d:1216,params:167,val:1.4789,acc:0.605,steps:20000,corpus:'SimpleStories 210M',note:'H3 apoiada: 20k no curado vence 68k no volume.'},
+ {id:'f138',date:'28/11',label:'F136→F138 · FineWeb',d:1216,params:167,val:null,acc:null,steps:9600,corpus:'FineWeb-Edu 1B (ids prontos)',note:'1B ids materializados com remap top-10000; val_loss PENDENTE de GPU.'},
  {id:'f128',date:'28/11',label:'F128 · byte+EOT',d:1312,params:166.67,val:null,acc:null,steps:9600,corpus:'TinyStories 24,9M ids (vocab 257)',note:'Gate F102 pre-registrado; treino em curso — val_loss pendente.'},
- {id:'f129',date:'28/11',label:'F129 · blocos mortos',d:1216,params:167.0,val:1.6982,acc:0.566,steps:9600,corpus:'SimpleStories ownremap 210M',note:'Controle do A/B: bloco 2 repetido 4x; ativar os 4 blocos piorou 0,0709 nat.'}
+ {id:'f129',date:'28/11',label:'F129 · blocos mortos',d:1216,params:167,val:1.6982,acc:0.566,steps:9600,corpus:'SimpleStories ownremap 210M',note:'Controle do A/B: bloco 2 repetido 4x; ativar os 4 blocos piorou 0,0709 nat.'},
+ {id:'f52-gate-1.5',date:'28/11',label:'F52-gate-1.5',d:null,params:null,val:1.4859,acc:null,steps:null,corpus:'lab-facts.json',note:'<=1.5'},
+ {id:'f86-h3-20k',date:'28/11',label:'F86-H3-20k',d:null,params:null,val:1.4789,acc:null,steps:null,corpus:'lab-facts.json',note:'<=1.5999'},
+ {id:'f69-compressao-dedup8',date:'28/11',label:'F69-compressao-dedup8',d:null,params:null,val:2.7304,acc:null,steps:null,corpus:'lab-facts.json',note:'<1.95'},
+ {id:'f96-kv-nao-binding',date:'28/11',label:'F96-KV-nao-binding',d:null,params:null,val:4.95,acc:null,steps:null,corpus:'lab-facts.json',note:'>=25% da VRAM'},
+ {id:'f102-byte-eot',date:'28/11',label:'F102-byte-EOT',d:null,params:null,val:0.651,acc:null,steps:null,corpus:'lab-facts.json',note:'val<=2.05 em 19.660.800 tokens vistos E custo de logits<=1/5 do baseline'},
+ {id:'f106-weight-entropy',date:'28/11',label:'F106-weight-entropy',d:null,params:null,val:21.9839,acc:null,steps:null,corpus:'lab-facts.json',note:'<=24 bits/peso e 2/3 grupos + decode<=10% do tempo/token'},
+ {id:'f118-corpus-escada',date:'28/11',label:'F118-corpus-escada',d:null,params:null,val:4.3656,acc:null,steps:null,corpus:'lab-facts.json',note:'val<=1.9762'},
+ {id:'f154',date:'28/11',label:'F154 · capacidade d1408',d:1408,params:null,val:1.7044,acc:0.5647,steps:38400,corpus:'SimpleStories ownremap 210M',note:'numero lido do JSON da frente'},
+ {id:'f156',date:'28/11',label:'F156 · elastic depth',d:1216,params:null,val:1.8437,acc:0.5434,steps:9600,corpus:'SimpleStories ownremap 210M',note:'numero lido do JSON da frente'},
+ {id:'f159-learned',date:'28/11',label:'F159 · learned seq1024',d:384,params:null,val:4.7729,acc:0.1885,steps:9600,corpus:'SimpleStories ownremap 210M',note:'numero lido do JSON da frente'},
+ {id:'f159-rope',date:'28/11',label:'F159 · RoPE seq1024',d:384,params:null,val:4.8661,acc:0.2006,steps:9600,corpus:'SimpleStories ownremap 210M',note:'numero lido do JSON da frente'},
+ {id:'f159-alibi',date:'28/11',label:'F159 · ALiBi seq1024',d:384,params:null,val:4.6721,acc:0.2422,steps:9600,corpus:'SimpleStories ownremap 210M',note:'numero lido do JSON da frente'},
+ {id:'f161-itq-d192',date:'28/11',label:'F161 · ITQ d192',d:192,params:null,val:2.5367,acc:0.2803,steps:240,corpus:'TinyStories bytes',note:'ortho_err=147.52989'},
+ {id:'f161-itq-d384',date:'28/11',label:'F161 · ITQ d384',d:384,params:null,val:2.5721,acc:0.2988,steps:240,corpus:'TinyStories bytes',note:'ortho_err=153.89412'},
+ {id:'f161-itq-d768',date:'28/11',label:'F161 · ITQ d768',d:768,params:null,val:2.5774,acc:0.2803,steps:240,corpus:'TinyStories bytes',note:'ortho_err=84.99385'}
 ];
 const MACH_PARTS={
  token:{t:'Token de entrada',m:'Remapeamento do vocabulário para os 10000 ids mais comuns; OOV cai no id 0.',f:'build_tokens(topk=10000, OOV→0)',code:'work/hybrid/f32-ablation.py:22',i:'texto do corpus',o:'id ∈ [0,9999]',store:'—',loop:'—',nums:[['vocab', '10000','REAL'],['ids FineWeb','1.000.000.000','REAL']],gate:'F118: token_count ≥1B PASSA'},
@@ -664,4 +679,76 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 })();
 
 </script>
+/* LAB_MOBILE_BEGIN */
+<script>
+/* LAB_MOBILE_BEGIN — controles touch para o /lab no celular.
+   Fonte: tools/lab-timeline/mobile-controls.js (gerado/injetado por
+   scripts/lab-view-sync.py). Nao editar a copia inline do index.html. */
+(function () {
+  const host = document.getElementById('lab3dCanvas');
+  if (!host) return;
+  host.style.touchAction = 'none';
+
+  const pts = new Map();
+  const dist = () => {
+    const a = [...pts.values()];
+    return a.length < 2 ? 0 : Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+  };
+  let lastDist = 0;
+  const zoom = (delta) => host.dispatchEvent(
+    new WheelEvent('wheel', { deltaY: delta, bubbles: true, cancelable: true }));
+
+  host.addEventListener('pointerdown', (e) => {
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) lastDist = dist();
+  });
+  host.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) {
+      const d = dist();
+      if (lastDist) zoom((lastDist - d) * 5);   // pinça: afasta ⇒ aproxima
+      lastDist = d;
+    }
+  });
+  const drop = (e) => { pts.delete(e.pointerId); if (pts.size < 2) lastDist = 0; };
+  host.addEventListener('pointerup', drop);
+  host.addEventListener('pointercancel', drop);
+
+  const bar = document.createElement('div');
+  bar.id = 'labMobileBar';
+  bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:10px;z-index:99;' +
+    'display:flex;gap:8px;justify-content:center;pointer-events:none;';
+  const mk = (txt, fn, title) => {
+    const b = document.createElement('button');
+    b.textContent = txt; b.title = title || txt;
+    b.style.cssText = 'pointer-events:auto;min-width:48px;min-height:44px;' +
+      'font-size:18px;border-radius:10px;border:1px solid #30363d;' +
+      'background:#161b22ee;color:#e6edf3;touch-action:manipulation;';
+    b.addEventListener('click', fn);
+    bar.appendChild(b);
+    return b;
+  };
+  const slider = document.getElementById('machRange');
+  const step = (n) => {
+    if (!slider) return;
+    const v = Math.max(0, Math.min(Number(slider.max || 0), Number(slider.value || 0) + n));
+    slider.value = v;
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  mk('−', () => zoom(90), 'Afastar');
+  mk('+', () => zoom(-90), 'Aproximar');
+  mk('‹', () => step(-1), 'Marco anterior');
+  mk('›', () => step(1), 'Próximo marco');
+  mk('▶', () => {
+    const play = document.getElementById('machPlay');
+    if (play) play.click();
+  }, 'Linha do tempo');
+  document.body.appendChild(bar);
+  window.labMobileReady = true;
+})();
+/* LAB_MOBILE_END */
+
+</script>
+/* LAB_MOBILE_END */
 </body></html>
