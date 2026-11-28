@@ -21,7 +21,7 @@ def test_mensagem_enderecada_exige_acao():
 
 
 def test_status_de_outra_lane_e_informativo():
-    acao, info = classify_pending([_p("status", "crouton-alpha", "scan rodando",
+    acao, info = classify_pending([_p("status", "agente-remoto", "scan rodando",
                                       why="endereçado")])
     # status enderecado que so informa estado nao exige acao
     assert not acao
@@ -57,7 +57,7 @@ def test_status_de_escopo_sobreposto_e_informativo():
 
 
 def test_a_linha_do_digest_diz_o_que_exige_acao():
-    pend = [_p("status", "crouton-alpha", "scan de rede rodando")] * 7
+    pend = [_p("status", "agente-remoto", "scan de rede rodando")] * 7
     pend.append(_p("msg", "coord-naming", "preciso de uma decisao"))
     linhas = digest_lines("sweep-2026-11", pend)
     # a janela do digest e o que ele mostra; o historico vem a parte
@@ -69,7 +69,7 @@ def test_a_linha_do_digest_diz_o_que_exige_acao():
 
 
 def test_digest_sem_acao_e_uma_linha_curta():
-    pend = [_p("status", "crouton-alpha", "status de outra lane")]
+    pend = [_p("status", "agente-remoto", "status de outra lane")]
     linhas = digest_lines("coord-naming", pend)
     assert linhas[0].startswith("[noite] 1 item(ns) no digest para coord-naming:")
     assert "0 exige(m) acao" in linhas[0]
@@ -79,7 +79,7 @@ def test_digest_sem_acao_e_uma_linha_curta():
 def test_a_janela_mostra_os_acionaveis_e_nao_o_historico():
     # (10/11) o que importa e a janela: um pedido novo no meio de 300
     # itens antigos de outra lane tem que aparecer.
-    pend = [_p("status", "crouton-alpha", "status antigo")] * 300
+    pend = [_p("status", "agente-remoto", "status antigo")] * 300
     pend.append(_p("msg", "coord-naming", "TRABALHO PARA VOCE: revisar o bus"))
     linhas = digest_lines("sweep-2026-11", pend)
     assert "1 exige(m) acao" in linhas[0]

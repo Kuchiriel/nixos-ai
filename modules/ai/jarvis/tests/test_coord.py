@@ -289,11 +289,11 @@ class TestCacheAndPending:
 
         monkeypatch.setattr(coord, "gh", fake_gh)
         coord.invalidate_cache()
-        coord.post(kind="msg", agent="Onca", to="Urubu", note="olá")
+        coord.post(kind="msg", agent="agente-teste", to="Urubu", note="olá")
         payload = coord.parse_payloads([posted[0]])[0]
         assert payload["to"] == "Urubu"
         assert payload["kind"] == "msg"
-        assert payload["agent"] == "Onca"
+        assert payload["agent"] == "agente-teste"
 
 
 class TestCrossMachineAndCacheCoherence:
@@ -350,8 +350,8 @@ class TestCrossMachineAndCacheCoherence:
             {"name": "Onca", "codename": "Onca", "lane": "nixos-ai/coord-mcp"},
         ])
         monkeypatch.setattr(coord, "send", fake_send)
-        out = coord_roster.send_message("crouton-alpha", "oi do celular")
-        assert posted["to"] == "crouton-alpha"
+        out = coord_roster.send_message("agente-remoto", "oi do celular")
+        assert posted["to"] == "agente-remoto"
         assert "bus" in out
 
 
