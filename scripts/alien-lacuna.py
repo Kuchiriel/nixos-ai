@@ -81,7 +81,15 @@ def main():
     ap.add_argument("--top", type=int, default=12)
     ap.add_argument("--avail-max", type=int, default=35)
     ap.add_argument("--min-alien", type=float, default=0.15)
+    ap.add_argument("--dry-run", action="store_true", help="não consulta RAG pesado; gera saída mínima")
+    ap.add_argument("--export-dir", default=str(Path.home()/ "work/hybrid"))
     args = ap.parse_args()
+
+    if args.dry_run:
+        res = {"event":"alien_lacuna_v3","ok":True,"dry_run":True,"ts":time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),"paper_basis":PAPER_REF,"rule":"Hipótese != evidência."}
+        out = Path(args.out); out.parent.mkdir(parents=True, exist_ok=True); out.write_text(json.dumps(res,ensure_ascii=False,indent=2)+"\n")
+        print(json.dumps(res, ensure_ascii=False))
+        return
 
     from jarvis.core.rag import HybridSearch
     hs = HybridSearch()
@@ -144,14 +152,19 @@ def main():
             if not left or not right: continue
             q = " ".join(sorted(set(re.findall(r"[a-z]{4,}", (left["atom"]+" "+right["atom"]).lower())))[:6])
             hits = set()
+            score_sum = 0.0; score_n = 0
             for coll in COLLS:
                 try:
-                    for h in hs.search(q, top_k=3, collection=coll, use_rerank=False):
+                    for h in hs.search(q, top_k=4, collection=coll, use_rerank=False):
                         hits.add(h.path)
+                        sc = float(getattr(h, "score", 0.0) or 0.0)
+                        if sc > 0: score_sum += sc; score_n += 1
                 except Exception:
                     pass
             avail = availability_proxy(hits, args.avail_max)
-            coh = coherence_proxy(left["atom"], right["atom"])
+            coh_lex = coherence_proxy(left["atom"], right["atom"])
+            coh_sem = min(1.0, (score_sum / score_n) if score_n else 0.0)
+            coh = round(0.55*coh_lex + 0.45*coh_sem, 3)
             alien = alien_score(coh, avail)
             claim = f"{left['atom']} | {right['atom']}"
             audit = bool(left["path"] and right["path"] and left["atom"] in left.get("snippet","") and right["atom"] in right.get("snippet",""))
@@ -194,9 +207,9 @@ def main():
     recommended = [p["id"] for p in top if p["promote"]][:3]
 
     res = {
-        "event": "alien_lacuna_v2",
+        "event": "alien_lacuna_v3",
         "paper_basis": PAPER_REF,
-        "mode": "heuristic (proxy coherence/availability; no trained Lacuna models)",
+        "mode": "heuristic v3 (lexical+semantic proxy coherence, availability, alien score; no trained Lacuna models)",
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "chunks": len(chunks),
         "atoms": len(uniq),
@@ -214,7 +227,24 @@ def main():
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
-    print(json.dumps({"ok": True, "chunks": len(chunks), "atoms": len(uniq), "hypotheses": len(top), "promovidas": res["promovidas"], "recommended_next": recommended}, ensure_ascii=False))
+    # export
+    try:
+        exp_dir = Path(args.export_dir); exp_dir.mkdir(parents=True, exist_ok=True)
+        exp = exp_dir / f"alien-lacuna-v3-{time.strftime('%Y%m%d-%H%M%S')}.json"
+        exp.write_text(json.dumps({"recommended_next": recommended, "top": top[:5], "ts": res["ts"], "paper_basis": PAPER_REF}, ensure_ascii=False, indent=2)+"\n")
+        res["export"] = str(exp)
+    except Exception as e:
+        res["export_error"] = str(e)[:200]
+    # bus summary (best-effort)
+    try:
+        import subprocess
+        msg = f"alien-lacuna-v3: atoms={len(uniq)} hyp={len(top)} promovidas={res['promovidas']} rec={','.join(recommended) or '-'} out={out}"
+        subprocess.run(["bash","-lc","command -v bus-post >/dev/null && bus-post --kind status --to todos "+json.dumps(msg)], timeout=20, cwd=str(Path.home()))
+        res["bus_posted"] = True
+    except Exception as e:
+        res["bus_posted"] = False; res["bus_error"] = str(e)[:200]
+    out.write_text(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
+    print(json.dumps({"ok": True, "chunks": len(chunks), "atoms": len(uniq), "hypotheses": len(top), "promovidas": res["promovidas"], "recommended_next": recommended, "export": res.get("export")}, ensure_ascii=False))
 
 if __name__ == "__main__":
     main()
