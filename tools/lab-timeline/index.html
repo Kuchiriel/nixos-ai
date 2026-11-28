@@ -176,7 +176,7 @@ window.MACH_STAGES=MACH_STAGES; window.MACH_PARTS=MACH_PARTS;
  <p style="color:#8b949e;font-size:12px;margin-bottom:0">Blocos translúcidos = invólucro; peças internas = LayerNorm, atenção (8 cabeças), FFN (4d) e somas residuais. A fita laranja é o laço ι=0..3; as bandas cinza à direita são a memória KV. Clique em qualquer peça para ver método, fórmula, arquivo de código, forma dos tensores e gate. Geometria esquemática; os números vêm dos checkpoints.</p>
 </section>
 
-<div class="card"><b>Escolha o eixo:</b>
+<div class="sub" style="margin:4px 0 12px">Cobertura real de 219 medições/17 frentes: val 70 · acc 149 · ECE 149 · tok/s 219 · VRAM 149 · tokens 60. Vazio = <b>não medido</b>, nunca estimado.</div><div class="card"><b>Escolha o eixo:</b>
  <button onclick="plot('val')">val loss</button>
  <button onclick="plot('acc')">acurácia</button>
  <button onclick="plot('ece')">ECE</button>
@@ -216,10 +216,11 @@ async function gen(){
       '\n\n['+(d.model??'?')+' · '+(d.tokens??0)+' tokens]';
   } catch(e) { out.textContent='erro: '+(e.message||e); }
 }
+function fmt(v){return (v===null||v===undefined)?'<span style=\"color:#8b949e\">não medido</span>':v;}
 function table(){
   const rows=D.slice(-30).reverse();
   document.getElementById('table').innerHTML='<table><tr><th>frente</th><th>escala</th><th>variante</th><th>val</th><th>acc</th><th>ECE</th></tr>'+
-   rows.map(r=>'<tr><td>'+r.front+'</td><td>'+r.scale+'</td><td>'+(r.variant||r.mode)+'</td><td>'+(r.val??'-')+'</td><td>'+(r.acc??'-')+'</td><td>'+(r.ece??'-')+'</td></tr>').join('')+'</table>';
+   rows.map(r=>'<tr><td>'+r.front+'</td><td>'+r.scale+'</td><td>'+(r.variant||r.mode)+'</td><td>'+fmt(r.val)+'</td><td>'+fmt(r.acc)+'</td><td>'+fmt(r.ece)+'</td></tr>').join('')+'</table>';
 }
 plot('val'); table();
 </script>
