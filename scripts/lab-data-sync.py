@@ -99,13 +99,16 @@ def main() -> int:
                 x['d'], x['itq']['val_loss'], x['itq']['acc'], r.get('steps'), None,
                 x['itq']['seconds'], 'TinyStories bytes',
                 'ortho_err=' + str(x['itq'].get('ortho_err')))
-    r = load(B / 'f164-corpus.json')
-    if r:
+    for tag in ('f164-corpus', 'f165-corpus'):
+        r = load(B / f'{tag}.json')
+        if not r:
+            continue
         for x in r.get('results', []):
-            add(stages, f"f164-binary-d{x['d']}", f"F164 · binário 20M d{x['d']}",
+            add(stages, f"{tag}-binary-d{x['d']}",
+                f"{'F164' if tag.startswith('f164') else 'F165'} · binário 20M d{x['d']}",
                 x['d'], x['binary']['val_loss'], x['binary']['acc'], r.get('steps'),
                 None, x['binary']['seconds'], 'TinyStories dedup8 20M',
-                'gate 3/3 PASSOU — efeito de volume de corpus')
+                'gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes')
     r = load(B / 'f163-itq-bpe.json')
     if r:
         for x in r.get('results', []):
