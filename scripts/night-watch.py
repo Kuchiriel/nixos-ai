@@ -109,7 +109,7 @@ def main() -> int:
                 import base64
                 auth = "Basic " + base64.b64encode(f"opencode:{pw}".encode()).decode()
                 req = urllib.request.Request(
-                    f"http://100.121.100.103:4599/api/session/{sess}",
+                    f"{os.environ.get('AGENTS_OC_URL','http://127.0.0.1:4599')}/api/session/{sess}",
                     headers={"Authorization": auth})
                 urllib.request.urlopen(req, timeout=15).read()
             except Exception as exc:  # noqa: BLE001

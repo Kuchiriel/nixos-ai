@@ -97,8 +97,8 @@ class AgentConfig:
         enderecos que realmente respondem.
         """
         fallback = {
-            "AGENTS_OC_URL": "http://100.121.100.103:4599",
-            "COORD_MCP_URL": "http://100.121.100.103:8765/mcp",
+            "AGENTS_OC_URL": os.environ.get("AGENTS_OC_URL","http://127.0.0.1:4599"),
+            "COORD_MCP_URL": os.environ.get("COORD_MCP_URL","http://127.0.0.1:8765/mcp"),
         }.get(chave)
         if fallback is not None:
             return self.ambiente.get(chave, fallback)
@@ -111,7 +111,7 @@ class AgentConfig:
         # SO no IP do tailnet -> Connection refused -> o roster marcava sessao
         # VIVA como dead e o agent-msg.sh recusava a entrega ("nenhum alvo").
         # O default agora e o endereco que realmente responde.
-        return self.ambiente.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
+        return self.ambiente.get("AGENTS_OC_URL", os.environ.get("AGENTS_OC_URL","http://127.0.0.1:4599"))
 
     @property
     def HUB_URL(self) -> str:
@@ -122,7 +122,7 @@ class AgentConfig:
         # (25/11, medido) o coord-mcp tambem escuta SÓ no IP do tailnet
         # (127.0.0.1:8765 recusa a conexão); o fallback antigo apontava
         # para o loopback e quebrava o poll do bus.
-        return self.ambiente.get("COORD_MCP_URL", "http://100.121.100.103:8765/mcp")
+        return self.ambiente.get("COORD_MCP_URL", os.environ.get("COORD_MCP_URL","http://127.0.0.1:8765/mcp"))
 
     @property
     def ROSTER_PATH(self) -> str:

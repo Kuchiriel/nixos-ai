@@ -35,7 +35,7 @@ REPO = HOME / "projects/nixos-ai"
 CATALOG = REPO / "modules/ai/free-providers.json"
 COOLDOWN = HOME / ".local/state/jarvis/provider-cooldown.json"
 GATE = "http://127.0.0.1:8095/__gate/health"
-OC_MODELS = "http://100.121.100.103:4599/api/model"
+OC_MODELS = os.environ.get("AGENTS_OC_URL","http://127.0.0.1:4599") + "/api/model"
 
 
 def _get(url: str, timeout: int = 12, headers: dict | None = None):

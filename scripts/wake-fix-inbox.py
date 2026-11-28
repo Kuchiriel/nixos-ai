@@ -23,7 +23,7 @@ import urllib.request
 from pathlib import Path
 
 HOME = Path.home()
-BASE = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
+BASE = os.environ.get("AGENTS_OC_URL", "http://127.0.0.1:4599")
 ENVFILE = HOME / ".config/opencode/server.env"
 ROSTER = HOME / "projects/.agents/roster.json"
 

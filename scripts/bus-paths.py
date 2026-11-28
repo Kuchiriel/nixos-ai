@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """Aggregate the fleet's real bus paths into one JSON feed for the hub.
 
@@ -23,7 +24,7 @@ from pathlib import Path
 HOME = Path.home()
 ISSUE = "Kuchiriel/mt5"
 GH_ISSUE = "100"
-MCP = "http://100.121.100.103:8765/mcp"
+MCP = os.environ.get("COORD_MCP_URL","http://127.0.0.1:8765/mcp")
 HUB_LOG = HOME / ".local/state/jarvis/hub-messages.jsonl"
 JOURNAL = HOME / ".local/state/jarvis/bus-journal"
 
