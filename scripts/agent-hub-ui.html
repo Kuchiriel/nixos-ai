@@ -243,12 +243,20 @@ pre.diff{
       </div>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
-      <div id="chatFeed" class="feed" style="max-height:52vh;padding:10px"></div>
-      <div style="border-top:1px solid var(--line);padding:10px;display:flex;gap:8px;flex-wrap:wrap">
-        <select id="chatMode" style="max-width:130px"><option value="wake">wake</option><option value="task">TASK</option><option value="note">NOTE</option></select>
-        <select id="chatTarget" style="max-width:220px"></select>
-        <input id="chatText" placeholder="Mensagem para o agente... (Enter envia)" style="flex:1;min-width:180px">
-        <button class="primary" id="chatSend">Enviar</button>
+      <div id="chatFeed" class="feed" style="max-height:40vh;padding:10px"></div>
+      <div style="border-top:1px solid var(--line);padding:10px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <input id="ragQ" placeholder="Buscar no RAG do host (papers/books)..." style="flex:1;min-width:180px">
+          <button id="ragGo">buscar RAG</button>
+          <button class="ghost" id="ragClear">limpar</button>
+        </div>
+        <div id="ragResults" class="tiny" style="max-height:18vh;overflow:auto;margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="chatMode" style="max-width:130px"><option value="wake">wake</option><option value="task">TASK</option><option value="note">NOTE</option></select>
+          <select id="chatTarget" style="max-width:220px"></select>
+          <input id="chatText" placeholder="Mensagem para o agente... (Enter envia)" style="flex:1;min-width:180px">
+          <button class="primary" id="chatSend">Enviar</button>
+        </div>
       </div>
     </div>
   </section>
@@ -792,6 +800,22 @@ async function loadChat(){
     renderChat();
   }catch(e){ showErr('loadChat', e); }
 }
+let RAG_LAST = [];
+async function searchRAG(){
+  const q = ($('#ragQ').value||'').trim();
+  if(!q){ toast('digite uma busca'); return; }
+  $('#ragGo').disabled=true; $('#ragResults').innerHTML='<span class="dim">buscando no RAG...</span>';
+  try{
+    const r = await api('/api/rag/search?q='+encodeURIComponent(q)+'&limit=5');
+    const j = await r.json();
+    if(!r.ok || !j.ok){ $('#ragResults').innerHTML='<span class="failc">erro: '+esc(j.error||r.status)+'</span>'; return; }
+    RAG_LAST = j.hits||[];
+    $('#ragResults').innerHTML = RAG_LAST.length ? RAG_LAST.map((h,i)=>`<div class="chat-msg" style="margin:4px 0"><div class="head"><span class="who">[${i+1}]</span><span class="tiny">${esc((h.title||h.path||'').slice(0,90))}</span><button class="ghost tiny" data-ragi="${i}">usar</button></div><div class="tiny dim">${esc((h.path||'').slice(0,120))}</div><div class="tiny" style="margin-top:4px">${esc((h.snippet||'').slice(0,220))}</div></div>`).join('') : '<span class="dim">sem hits</span>';
+    $$('#ragResults [data-ragi]').forEach(b=>b.onclick=()=>{ const h=RAG_LAST[+b.dataset.ragi]; const t=$('#chatText'); t.value=(t.value?t.value+'\n\n':'')+'Fonte RAG: '+(h.title||h.path)+'\n'+(h.snippet||'').slice(0,200)+'\n('+h.path+')'; t.focus(); });
+  }catch(e){ $('#ragResults').innerHTML='<span class="failc">erro: '+esc(e)+'</span>'; }
+  $('#ragGo').disabled=false;
+}
+function clearRAG(){ RAG_LAST=[]; $('#ragResults').innerHTML=''; $('#ragQ').value=''; }
 async function sendChat(){
   const name = ($('#chatTarget').value || $('#cmdTarget').value || '').trim();
   const mode = ($('#chatMode').value || 'wake').trim();
@@ -805,7 +829,12 @@ async function sendChat(){
     const r = await api('/api/wake', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, text})});
     const j = await r.json().catch(()=>({}));
     if(!r.ok || j.ok===false){ toast('falha: '+(j.error||r.status)); }
-    else { toast('enviado para '+name); CHAT_CACHE.unshift({ts:Date.now(), from:'você', to:name, kind:'wake', text}); $('#chatText').value=''; renderChat(); }
+    else {
+      if(RAG_LAST.length){ try{ await api('/api/events',{}); }catch{} }
+      toast('enviado para '+name);
+      CHAT_CACHE.unshift({ts:Date.now(), from:'você', to:name, kind:'wake', text: (RAG_LAST.length? '[RAG '+RAG_LAST.length+' fontes] ' : '') + text});
+      $('#chatText').value=''; renderChat();
+    }
   }catch(e){ toast('falha: '+e); }
   $('#chatSend').disabled = false;
 }

@@ -939,6 +939,22 @@ async function handler(req, res) {
   // (16/11) FLUXO DE EVENTOS: SSE. O painel ve o happening em tempo real
   // (nascimento, persona, fala, tool, swap, reload, falha, sucesso) sem
   // polling de pagina inteira.
+  if (req.method === 'GET' && url.pathname === '/api/rag/search') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
+    const q = String(url.searchParams.get('q') || '').trim().slice(0,300);
+    const limit = Math.min(10, Math.max(1, parseInt(url.searchParams.get('limit') || '5', 10)));
+    if (!q) return send(400, JSON.stringify({ ok:false, error:'q required' }), 'application/json');
+    try {
+      const code = `import json,sys\nsys.path.insert(0,'modules/ai/jarvis/src'); sys.path.insert(0,'modules/ai')\nfrom jarvis.core.rag import HybridSearch\nq=sys.argv[1]; k=int(sys.argv[2])\nhs=HybridSearch()\nout=[]\nfor h in hs.search(q, top_k=k, collection='books', use_rerank=False):\n    p=h.payload or {}\n    out.append({'title':(p.get('title') or '')[:140],'path':h.path,'score':getattr(h,'score',None),'snippet':(p.get('content') or '')[:280].replace('\\n',' ')})\nprint(json.dumps(out, ensure_ascii=False))`;
+      const r = spawnSync('nix', ['develop','--command','python3','-c',code,q,String(limit)], { cwd: '/home/nixos/projects/nixos-ai', encoding:'utf8', timeout: 120000, env: { ...process.env } });
+      if (r.status !== 0) return send(500, JSON.stringify({ ok:false, error:(r.stderr||r.stdout||'rag failed').slice(0,400) }), 'application/json');
+      const hits = JSON.parse((r.stdout || '[]').trim() || '[]');
+      evPush('rag', `RAG: ${q.slice(0,80)} (${hits.length} hits)`, { q, hits: hits.map(h=>({title:h.title,path:h.path})) });
+      return send(200, JSON.stringify({ ok:true, q, hits }), 'application/json');
+    } catch (e) {
+      return send(500, JSON.stringify({ ok:false, error:String(e).slice(0,300) }), 'application/json');
+    }
+  }
   if (req.method === 'GET' && url.pathname === '/api/tasks') {
     if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
     return send(200, JSON.stringify({ ok:true, tasks: TASKS.slice(0,200) }), 'application/json');
