@@ -208,6 +208,7 @@ pre.diff{
   <section class="sec" id="tab-mission">
     <h2>mission control <span class="grow"></span><span class="tiny dim" id="missionTs"></span> <button class="ghost tiny" id="btnMission">↻</button></h2>
     <div class="abstats" id="missionStats"></div>
+    <div class="card" style="margin-top:10px"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">Chief of Staff (digest)</h3><div id="missionChief" class="tiny"></div></div>
     <div class="grid two" style="margin-top:10px">
       <div class="card"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">saúde / links</h3><div id="missionHealth" class="tiny"></div></div>
       <div class="card"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">stale / atenção</h3><div id="missionStale" class="tiny"></div></div>
@@ -750,6 +751,9 @@ async function loadMission(){
     $('#missionFails').innerHTML = fails.length ? fails.map(e=>`<div class="ev k-fail"><span class="t">${hhmm(e.ts)}</span><span class="k">${esc(e.kind||'fail')}</span><span class="m">${esc(e.text||'')}</span></div>`).join('') : '<span class="dim">sem falhas recentes</span>';
     const evs = d.recentEvents||[];
     $('#missionEv').innerHTML = evs.length ? evs.map(e=>`<div class="ev k-${esc(e.kind||'ok')}"><span class="t">${hhmm(e.ts)}</span><span class="k">${esc(e.kind||'')}</span><span class="m">${esc((e.text||'').slice(0,160))}</span></div>`).join('') : '<span class="dim">sem eventos</span>';
+    const chief = d.chief || {};
+    const mk = (arr)=> (arr&&arr.length)?'<ul style="margin:4px 0 0 18px;padding:0">'+arr.map(x=>'<li>'+esc(String(x)).slice(0,140)+'</li>').join('')+'</ul>':'<div class="dim">nada</div>';
+    $('#missionChief').innerHTML = `<div class="grid two"><div><b class="warnc">Bloqueios/falhas</b>${mk(chief.blockers)}</div><div><b class="warnc">Stale</b>${mk(chief.stale)}</div></div><div style="margin-top:8px"><b class="okc">Próximas ações</b>${mk(chief.next_actions)}</div><div class="tiny dim" style="margin-top:6px">open_tasks=${chief.open_tasks||0}</div>`;
     await loadTaskAgents(); await loadTasksUI();
   }catch(e){ showErr('loadMission', e); }
 }

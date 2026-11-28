@@ -1242,6 +1242,18 @@ async function handler(req, res) {
     const recentEvents = EVBUF.slice(-30).reverse();
     const failures = EVBUF.filter(e=>['fail','error'].includes(String(e.kind||'').toLowerCase())).slice(-10).reverse();
     const stale = agents.filter(a=>a.updated && (now-a.updated)>30*60*1000 && !a.unclaimed).slice(0,10).map(a=>({name:a.codename||a.name, session:a.session, age_s:Math.round((now-a.updated)/1000), status:a.status, model:a.model}));
+    const tasks = Array.isArray(TASKS) ? TASKS : [];
+    const openTasks = tasks.filter(t=>['pending','doing','blocked'].includes(t.status)).slice(0,8);
+    const chief = {
+      blockers: failures.slice(0,5).map(f=>f.text),
+      stale: stale.slice(0,5).map(x=>`${x.name} (${Math.round((x.age_s||0)/60)}m, ${x.status})`),
+      next_actions: [
+        ...openTasks.slice(0,4).map(t=>`${t.status}: ${t.title}${t.agent?' -> '+t.agent:''}`),
+        ...(stale.length ? [`revisar stale: ${stale[0].name}`] : []),
+        ...(failures.length ? [`investigar falha: ${(failures[0].text||'').slice(0,80)}`] : []),
+      ].slice(0,6),
+      open_tasks: openTasks.length,
+    };
     const summary = {
       ok: true,
       ts: now,
@@ -1250,7 +1262,8 @@ async function handler(req, res) {
       stale,
       failures,
       recentEvents,
-      links: { lab:'/lab', house:'/house', agents:'/api/agents', bus:'/api/bus?limit=40' },
+      chief,
+      links: { lab:'/lab', house:'/house', agents:'/api/agents', bus:'/api/bus?limit=40', tasks:'/api/tasks' },
       papers: { note:'AgentGUI/AgentOps/AgentSysOps/GovernanceTelemetry + Lacuna alien-sampling (2603.01092) indexed in host Books/RAG' }
     };
     return send(200, JSON.stringify(summary), 'application/json');
