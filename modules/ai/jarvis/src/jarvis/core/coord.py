@@ -612,9 +612,12 @@ def post(
     """
     if kind not in CLAIM_KINDS:
         raise ValueError(f"kind inválido: {kind} (use {'|'.join(CLAIM_KINDS)})")
+    _agent = agent or agent_id()
+    if _agent in {"crouton-alpha","crouton alpha","TAB","Onca","Arara","arara","termux","nitro-v15","nitro_v15"}:
+        raise ValueError(f"identidade v1: '{_agent}' é nome fixo proibido; use agent-codename --json")
     payload = {
         "kind": kind,
-        "agent": agent or agent_id(),
+        "agent": _agent,
         "to": to or "",
         "host": host_info(),
         "lane": lane or "",

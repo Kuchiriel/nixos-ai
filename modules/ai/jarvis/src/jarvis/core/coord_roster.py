@@ -36,11 +36,21 @@ from typing import Any
 
 DEFAULT_AGENT = "jarvis"
 
+FORBIDDEN_FIXED_SESSION_AGENTS = {"crouton-alpha","crouton alpha","TAB","Onca","Arara","arara","termux","nitro-v15","nitro_v15"}
+
+def validate_agent_name(name: str, *, allow_legacy: bool = False) -> None:
+    n = (name or "").strip()
+    if not n:
+        raise ValueError("agent name vazio")
+    if not allow_legacy and n in FORBIDDEN_FIXED_SESSION_AGENTS:
+        raise ValueError(f"identidade v1: '{n}' é nome fixo proibido; use agent-codename --json")
+
+
 
 def _repo_root() -> Path:
     """Raiz do repo nixos-ai (sobe até achar scripts/agent-roster.py).
 
-    (14/11, crouton-alpha) BUG CORRIGIDO: o fallback usava
+    (14/11, identidade v1) BUG CORRIGIDO: o fallback usava
     jarvis.core.paths.find_repo_root(), que resolve o PROJECT ROOT — e o
     walk-up dele achou /home/nixos (tem .git) ou o JARVIS_WORKSPACE_ROOT
     (/home/nixos/projects). Resultado: _script() virava
@@ -283,6 +293,8 @@ def _origin_context() -> str:
 
 
 def send_message(target: str, message: str, note: bool = True) -> str:
+    if (target or "").strip() in FORBIDDEN_FIXED_SESSION_AGENTS:
+        return f"erro: identidade v1 — '{target}' é nome fixo proibido; use codename da sessão"
     """Entrega mensagem a um par (por codinome ou nome).
 
     DUAS ETAPAS, e a ordem importa:
@@ -341,7 +353,7 @@ def send_message(target: str, message: str, note: bool = True) -> str:
                 "a mensagem ficou no bus e será lida no próximo poll do watcher)")
     # nome canonico do registro (para a API e para o agent-msg.sh)
     name = str(local_match.get("name") or name)
-    # (14/11, crouton-alpha) ACORDAR PELO PROMPT, NAO PELO BUS.
+    # (14/11, identidade v1) ACORDAR PELO PROMPT, NAO PELO BUS.
     # O bug medido: agent-msg.sh decide "vivo" pela JANELA Hyprland
     # (windows --json) — invisivel para servico headless (Telegram, cron,
     # ssh). O /to do Telegram postava no bus e devolvia "sucesso" sem nunca
@@ -357,7 +369,7 @@ def send_message(target: str, message: str, note: bool = True) -> str:
         session = ""
     if session:
         payload = message.strip()
-        # (15/11, crouton-alpha) O ESPECIALISTA PRECISA VER O PEDIDO ORIGINAL.
+        # (15/11, identidade v1) O ESPECIALISTA PRECISA VER O PEDIDO ORIGINAL.
         # Medido num video sobre times de modelos (Kimi 4B planejador +
         # especialistas): "Meus especialistas sao so [o que o planejador
         # escreveu]. Eles nunca viram meu pedido original" — e o time ficou
