@@ -32,5 +32,9 @@ const MACH_STAGES=[
  {id:'f163-binary-d384',date:'28/11',label:'F163 · binary BPE d384',d:384,params:null,val:5.4892,acc:0.1279,steps:240,corpus:'SimpleStories BPE vocab 10000',note:'ortho_err=None'},
  {id:'f163-itq-d384',date:'28/11',label:'F163 · itq BPE d384',d:384,params:null,val:6.067,acc:0.1064,steps:240,corpus:'SimpleStories BPE vocab 10000',note:'ortho_err=0.0'},
  {id:'f163-binary-d768',date:'28/11',label:'F163 · binary BPE d768',d:768,params:null,val:5.9247,acc:0.1357,steps:240,corpus:'SimpleStories BPE vocab 10000',note:'ortho_err=None'},
- {id:'f163-itq-d768',date:'28/11',label:'F163 · itq BPE d768',d:768,params:null,val:6.4424,acc:0.0635,steps:240,corpus:'SimpleStories BPE vocab 10000',note:'ortho_err=0.0'}
+ {id:'f163-itq-d768',date:'28/11',label:'F163 · itq BPE d768',d:768,params:null,val:6.4424,acc:0.0635,steps:240,corpus:'SimpleStories BPE vocab 10000',note:'ortho_err=0.0'},
+ {id:'f160-learned',date:'28/11',label:'F160 · learned seq4096',d:384,params:null,val:5.1084,acc:0.1597,steps:4800,corpus:'SimpleStories ownremap 210M',note:'seq4096 — gate F98'},
+ {id:'f164-binary-d192',date:'28/11',label:'F164 · binário 20M d192',d:192,params:null,val:5.2714,acc:0.1538,steps:240,corpus:'TinyStories dedup8 20M',note:'gate 3/3 PASSOU — efeito de volume de corpus'},
+ {id:'f164-binary-d384',date:'28/11',label:'F164 · binário 20M d384',d:384,params:null,val:5.3884,acc:0.1445,steps:240,corpus:'TinyStories dedup8 20M',note:'gate 3/3 PASSOU — efeito de volume de corpus'},
+ {id:'f164-binary-d768',date:'28/11',label:'F164 · binário 20M d768',d:768,params:null,val:5.8749,acc:0.1382,steps:240,corpus:'TinyStories dedup8 20M',note:'gate 3/3 PASSOU — efeito de volume de corpus'}
 ];
