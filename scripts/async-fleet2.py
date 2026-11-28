@@ -6,7 +6,7 @@ from pathlib import Path
 
 HERE = Path('/home/nixos')
 EVENTS = HERE / 'work/hybrid/async-events.jsonl'
-PHONE = os.environ.get('TERMUX_PHONE_SSH','u0_a438@100.104.175.123')
+PHONE = os.environ.get('TERMUX_PHONE_SSH','u0_a438@100.104.175.123')  # fallback local; env tem precedência
 AW = '/data/data/com.termux/files/home/bin/auto-wake'
 PRIN = 'improver-termux-fast@termux:ses_e52816aa7ffe4zi1iV7cJ8mvtc'
 JOBS = [

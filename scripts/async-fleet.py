@@ -13,7 +13,7 @@ from pathlib import Path
 
 HERE = Path('/home/nixos')
 EVENTS = HERE / 'work/hybrid/async-events.jsonl'
-PHONE = os.environ.get('TERMUX_PHONE_SSH','u0_a438@100.104.175.123')
+PHONE = os.environ.get('TERMUX_PHONE_SSH','u0_a438@100.104.175.123')  # fallback local; env tem precedência
 PHONE_PORT = 8022
 AW = '/data/data/com.termux/files/home/bin/auto-wake'
 BUS = '/data/data/com.termux/files/home/bin/bus-post'

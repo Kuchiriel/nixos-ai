@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 
 STATE = Path.home() / ".local/state/fleet-milestone.seen.json"
-PHONE = os.environ.get("TERMUX_PHONE_SSH", os.environ.get("PHONE", "u0_a438@100.104.175.123"))
+PHONE = os.environ.get("TERMUX_PHONE_SSH", os.environ.get("PHONE", "u0_a438@100.104.175.123"))  # fallback local; env tem precedência
 PATTERNS = [
     (re.compile(r"credencial rotacionada|key-rotate", re.I), "KEY"),
     (re.compile(r"ck=v3.*(5 passed|motivo=review)|veredito", re.I), "AB"),

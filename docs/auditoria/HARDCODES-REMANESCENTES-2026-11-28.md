@@ -10,9 +10,10 @@
 ## Classificação (IPs tailnet)
 
 ### Dinâmico/aceitável (env-first, fallback literal documentado)
-- `modules/ai/jarvis/src/jarvis/coord_http.py` — `TERMUX_PHONE_SSH/TERMUX_PHONE_PORT` env; fallback literal mantido para compat.
-- `scripts/async-fleet.py`, `scripts/async-fleet2.py` — `TERMUX_PHONE_SSH` env; fallback literal.
-- `scripts/fleet-milestone.py` — `TERMUX_PHONE_SSH/PHONE` env; fallback literal.
+- `modules/ai/jarvis/src/jarvis/coord_http.py` — `TERMUX_PHONE_SSH/TERMUX_PHONE_PORT` env; fallback literal mantido (conveniência local; default neutro quebraria alcance do phone sem config). Exceção documentada.
+- `scripts/async-fleet.py`, `scripts/async-fleet2.py` — `TERMUX_PHONE_SSH` env; fallback literal local, env tem precedência. Exceção documentada.
+- `scripts/fleet-milestone.py` — `TERMUX_PHONE_SSH/PHONE` env; fallback literal local, env tem precedência. Exceção documentada.
+- Decisão 28/11: manter fallback literal + comentário explícito; não trocar para default neutro sem prova de não regressão.
 
 ### Contrato/config canônico (exceção documentada, não alterar cegamente)
 - `scripts/agent-config.json` — SSOT de endpoints tailnet do host.

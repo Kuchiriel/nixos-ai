@@ -456,7 +456,7 @@ def build_server():
             return ("coord_phonefs: 'apply' exige 'confirm' com o token do plano. "
                     "O dono precisa aprovar (o token vem do 'plans' no celular). "
                     "Nenhum arquivo e movido sem isso.")
-        _phone = os.environ.get("TERMUX_PHONE_SSH", "u0_a438@100.104.175.123")
+        _phone = os.environ.get("TERMUX_PHONE_SSH", "u0_a438@100.104.175.123")  # fallback local; env tem precedência
         _port = os.environ.get("TERMUX_PHONE_PORT", "8022")
         cmd = ["ssh", "-p", _port, "-o", "BatchMode=yes", "-o",
                "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
