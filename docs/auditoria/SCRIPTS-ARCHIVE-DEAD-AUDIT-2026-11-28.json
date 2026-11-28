@@ -1,0 +1,512 @@
+{
+  "ts": "2026-11-28",
+  "archive_count": 29,
+  "archive": [
+    {
+      "file": "scripts/archive/README.md",
+      "bytes": 981,
+      "refs_total": 64,
+      "refs_code_nonarchive": 59,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/backups/README.md",
+      "bytes": 1219,
+      "refs_total": 64,
+      "refs_code_nonarchive": 59,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/bench-legacy-2026-09-25/a-b-compare.sh",
+      "bytes": 2813,
+      "refs_total": 9,
+      "refs_code_nonarchive": 9,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/bench-legacy-2026-09-25/acceptance_bench.py",
+      "bytes": 4918,
+      "refs_total": 7,
+      "refs_code_nonarchive": 7,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/bench-legacy-2026-09-25/bench-one.sh",
+      "bytes": 3528,
+      "refs_total": 9,
+      "refs_code_nonarchive": 9,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/bench-legacy-2026-09-25/benchmark-official.py",
+      "bytes": 29708,
+      "refs_total": 11,
+      "refs_code_nonarchive": 11,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/bench-legacy-2026-09-25/proper-benchmark.sh",
+      "bytes": 8216,
+      "refs_total": 12,
+      "refs_code_nonarchive": 10,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/bench-legacy-2026-09-25/quick-bench.sh",
+      "bytes": 6048,
+      "refs_total": 10,
+      "refs_code_nonarchive": 9,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/bench-legacy-2026-09-25/systematic-benchmark.sh",
+      "bytes": 7925,
+      "refs_total": 9,
+      "refs_code_nonarchive": 9,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/benchmark-root-duplicate.sh",
+      "bytes": 4613,
+      "refs_total": 3,
+      "refs_code_nonarchive": 3,
+      "flag": "duplicate"
+    },
+    {
+      "file": "scripts/archive/clean-project.sh",
+      "bytes": 694,
+      "refs_total": 5,
+      "refs_code_nonarchive": 5,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/continuous-improvement-legacy.sh",
+      "bytes": 6301,
+      "refs_total": 3,
+      "refs_code_nonarchive": 3,
+      "flag": "legacy"
+    },
+    {
+      "file": "scripts/archive/fix-qdrant.sh",
+      "bytes": 2193,
+      "refs_total": 7,
+      "refs_code_nonarchive": 6,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/llama.sh",
+      "bytes": 156,
+      "refs_total": 5,
+      "refs_code_nonarchive": 4,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/mount_manjaro.sh",
+      "bytes": 219,
+      "refs_total": 7,
+      "refs_code_nonarchive": 5,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/nightwatch-anchor-old.sh",
+      "bytes": 5641,
+      "refs_total": 3,
+      "refs_code_nonarchive": 3,
+      "flag": "legacy"
+    },
+    {
+      "file": "scripts/archive/run-ab-test-duplicate.sh",
+      "bytes": 3072,
+      "refs_total": 3,
+      "refs_code_nonarchive": 3,
+      "flag": "duplicate"
+    },
+    {
+      "file": "scripts/archive/test-aider-benchmark-duplicate.sh",
+      "bytes": 8094,
+      "refs_total": 3,
+      "refs_code_nonarchive": 3,
+      "flag": "duplicate"
+    },
+    {
+      "file": "scripts/archive/test-aider-duplicate.sh",
+      "bytes": 3631,
+      "refs_total": 3,
+      "refs_code_nonarchive": 3,
+      "flag": "duplicate"
+    },
+    {
+      "file": "scripts/archive/tuning-engines-2026-09-29/README.md",
+      "bytes": 2151,
+      "refs_total": 63,
+      "refs_code_nonarchive": 58,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/tuning-engines-2026-09-29/fast_tune.py",
+      "bytes": 17300,
+      "refs_total": 7,
+      "refs_code_nonarchive": 7,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/tuning-engines-2026-09-29/fast_tune.sh",
+      "bytes": 1094,
+      "refs_total": 6,
+      "refs_code_nonarchive": 6,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/tuning-engines-2026-09-29/ga-benchmark-duplicate.sh",
+      "bytes": 4216,
+      "refs_total": 4,
+      "refs_code_nonarchive": 4,
+      "flag": "duplicate"
+    },
+    {
+      "file": "scripts/archive/tuning-engines-2026-09-29/ga_engine.py",
+      "bytes": 30419,
+      "refs_total": 7,
+      "refs_code_nonarchive": 7,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/tuning-engines-2026-09-29/grid-benchmark-duplicate.sh",
+      "bytes": 2305,
+      "refs_total": 4,
+      "refs_code_nonarchive": 4,
+      "flag": "duplicate"
+    },
+    {
+      "file": "scripts/archive/tuning-engines-2026-09-29/grid_engine.py",
+      "bytes": 12740,
+      "refs_total": 6,
+      "refs_code_nonarchive": 6,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/tuning-engines-2026-09-29/llm-tune.sh",
+      "bytes": 3068,
+      "refs_total": 6,
+      "refs_code_nonarchive": 6,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/tuning-engines-2026-09-29/llm_tune.py",
+      "bytes": 19507,
+      "refs_total": 6,
+      "refs_code_nonarchive": 6,
+      "flag": ""
+    },
+    {
+      "file": "scripts/archive/tuning-engines-2026-09-29/run-tune-wrapper.sh",
+      "bytes": 514,
+      "refs_total": 4,
+      "refs_code_nonarchive": 4,
+      "flag": ""
+    }
+  ],
+  "dead_outside_archive_sample_count": 60,
+  "dead_outside_archive_sample": [
+    {
+      "file": "scripts/ablation_watch.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/agent-db-alive.py.bak-20261115",
+      "refs_total": 2,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/agent-hub.mjs.0.0.0.bak-20261114",
+      "refs_total": 2,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/agent-msg.sh.bak-20261114",
+      "refs_total": 2,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/agent-provider-guard.py.bak-20261115",
+      "refs_total": 2,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/agent-roster.py.bak-20261115",
+      "refs_total": 2,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/alien-lacuna.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/alien-paper-hunt.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/alien-sampling-rag.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/alien-sampling-scan.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/alien-sampling-v2.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/apply-real-provenance.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/async-fleet.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/async-fleet2.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/audit-doc-links.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/backfill_canonical_test.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/bench-local-llm.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/beta-anchor.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/boost-pool-ab.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/byte-ab-tinyshakespeare.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/byte-eot.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/duplex-warmup.wav",
+      "refs_total": 2,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/dust-rigorous.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/f13-eval.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/f14-kv.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/f15-debug.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/f15-debug2.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/f15fix-equiv2.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/f16-measure.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/f24-freegen.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/f27-eval.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/f30-dashboard.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/hybrid-eval-earlystop.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/hybrid-latent-audit.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/index-lab-measurements.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/index_opencode_sessions.py.bak-20261115",
+      "refs_total": 2,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/itq-binary-rag-h3.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/kaggle-conta.sh",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/kaggle-split-kernels.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/lab-facts.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/lab-l2-arm",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/littlebit2-aggregate-final.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/littlebit2-itq-probe.py",
+      "refs_total": 2,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/littlebit2-local-decode.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/loop-saturation-ab.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/make-littlebit2-resume-job.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/mtp-ab-8092-8095.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/mtp-long-ab.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/mtp-same-ab.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/plugin-memory-host.js",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/provar-pratica-ate-o-dataset.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/quality-ab-local.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/rag-index-ab-real.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/rag-index-ab.py",
+      "refs_total": 2,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/relevance-boost-ab.py",
+      "refs_total": 1,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/run-ablation.sh",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/run-pos4k.sh",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/scale-loop-elastic.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/scan-all-provenance.py",
+      "refs_total": 0,
+      "refs_non_docs": 0
+    },
+    {
+      "file": "scripts/test_consulta_obrigatoria.py",
+      "refs_total": 3,
+      "refs_non_docs": 0
+    }
+  ]
+}
