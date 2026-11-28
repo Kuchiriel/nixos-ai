@@ -1185,7 +1185,7 @@ async function handler(req, res) {
       failures,
       recentEvents,
       links: { lab:'/lab', house:'/house', agents:'/api/agents', bus:'/api/bus?limit=40' },
-      papers: { note:'AgentGUI/AgentOps/AgentSysOps/GovernanceTelemetry indexed in Books/papers/agent-hub-mission-control-2026-11-28' }
+      papers: { note:'AgentGUI/AgentOps/AgentSysOps/GovernanceTelemetry + Lacuna alien-sampling (2603.01092) indexed in host Books/RAG' }
     };
     return send(200, JSON.stringify(summary), 'application/json');
   }

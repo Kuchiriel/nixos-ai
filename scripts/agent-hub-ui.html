@@ -234,6 +234,7 @@ pre.diff{
     <div class="card" style="padding:0;overflow:hidden">
       <div id="chatFeed" class="feed" style="max-height:52vh;padding:10px"></div>
       <div style="border-top:1px solid var(--line);padding:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <select id="chatMode" style="max-width:130px"><option value="wake">wake</option><option value="task">TASK</option><option value="note">NOTE</option></select>
         <select id="chatTarget" style="max-width:220px"></select>
         <input id="chatText" placeholder="Mensagem para o agente... (Enter envia)" style="flex:1;min-width:180px">
         <button class="primary" id="chatSend">Enviar</button>
@@ -725,7 +726,10 @@ async function loadChat(){
 }
 async function sendChat(){
   const name = ($('#chatTarget').value || $('#cmdTarget').value || '').trim();
-  const text = ($('#chatText').value || '').trim();
+  const mode = ($('#chatMode').value || 'wake').trim();
+  let text = ($('#chatText').value || '').trim();
+  if(mode === 'task' && text && !/^TASK\b/i.test(text)) text = 'TASK: ' + text;
+  if(mode === 'note' && text && !/^NOTE\b/i.test(text)) text = 'NOTE: ' + text;
   if(!name){ toast('escolha um alvo'); return; }
   if(!text){ toast('escreva uma mensagem'); return; }
   $('#chatSend').disabled = true;
