@@ -465,9 +465,7 @@
     "acc": 0.1718,
     "steps": 4800,
     "corpus": "SimpleStories ownremap 210M",
-    "note": "seq4096 — gate F98",
-    "vram": 2442056704,
-    "seconds": 449.7
+    "note": "seq4096 — gate F98"
   },
   {
     "id": "f164-corpus-binary-d192",
@@ -479,9 +477,7 @@
     "acc": 0.1538,
     "steps": 240,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes",
-    "vram": null,
-    "seconds": 19.5
+    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes"
   },
   {
     "id": "f164-corpus-binary-d384",
@@ -493,9 +489,7 @@
     "acc": 0.1445,
     "steps": 240,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes",
-    "vram": null,
-    "seconds": 27.1
+    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes"
   },
   {
     "id": "f164-corpus-binary-d768",
@@ -507,9 +501,7 @@
     "acc": 0.1382,
     "steps": 240,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes",
-    "vram": null,
-    "seconds": 50.2
+    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes"
   },
   {
     "id": "f165-corpus-binary-d192",
@@ -521,9 +513,7 @@
     "acc": 0.1538,
     "steps": 240,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes",
-    "vram": null,
-    "seconds": 20.1
+    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes"
   },
   {
     "id": "f165-corpus-binary-d384",
@@ -535,9 +525,7 @@
     "acc": 0.1577,
     "steps": 240,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes",
-    "vram": null,
-    "seconds": 28.0
+    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes"
   },
   {
     "id": "f165-corpus-binary-d768",
@@ -549,8 +537,20 @@
     "acc": 0.1394,
     "steps": 240,
     "corpus": "TinyStories dedup8 20M",
-    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes",
-    "vram": null,
-    "seconds": 48.4
+    "note": "gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes"
+  },
+  {
+    "id": "f160-alibi",
+    "date": "28/11",
+    "label": "F160 · alibi seq4096",
+    "d": 384,
+    "params": null,
+    "val": 5.0614,
+    "acc": 0.2048,
+    "steps": 4800,
+    "corpus": "SimpleStories ownremap 210M",
+    "note": "seq4096 — gate F98",
+    "vram": 2978456576,
+    "seconds": 452.9
   }
 ]

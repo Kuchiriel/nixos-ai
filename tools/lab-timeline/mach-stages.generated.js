@@ -43,5 +43,6 @@ const MACH_STAGES=[
  {id:'f164-corpus-binary-d768',date:'28/11',label:'F164 · binário 20M d768',d:768,params:null,val:5.8749,acc:0.1382,steps:240,corpus:'TinyStories dedup8 20M',note:'gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes'},
  {id:'f165-corpus-binary-d192',date:'28/11',label:'F165 · binário 20M d192',d:192,params:null,val:5.262,acc:0.1538,steps:240,corpus:'TinyStories dedup8 20M',note:'gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes'},
  {id:'f165-corpus-binary-d384',date:'28/11',label:'F165 · binário 20M d384',d:384,params:null,val:5.3779,acc:0.1577,steps:240,corpus:'TinyStories dedup8 20M',note:'gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes'},
- {id:'f165-corpus-binary-d768',date:'28/11',label:'F165 · binário 20M d768',d:768,params:null,val:5.8774,acc:0.1394,steps:240,corpus:'TinyStories dedup8 20M',note:'gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes'}
+ {id:'f165-corpus-binary-d768',date:'28/11',label:'F165 · binário 20M d768',d:768,params:null,val:5.8774,acc:0.1394,steps:240,corpus:'TinyStories dedup8 20M',note:'gate 3/3 PASSOU — efeito de volume de corpus, 2 sementes'},
+ {id:'f160-alibi',date:'28/11',label:'F160 · alibi seq4096',d:384,params:null,val:5.0614,acc:0.2048,steps:4800,corpus:'SimpleStories ownremap 210M',note:'seq4096 — gate F98'}
 ];
