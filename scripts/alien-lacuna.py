@@ -13,7 +13,10 @@ SEEDS = ("elastic latent recurrence loop index conditioning",
          "lossless speculative decoding draft verify",
          "byte EOT tokenizer data efficiency",
          "curated educational corpus filtering threshold",
-         "residual normalization massive activations stages")
+         "residual normalization massive activations stages",
+         "mixture of loops transformer experts",
+         "late entry looped language models",
+         "selective refinement implicit reasoning loop")
 COLLS = ("code_index", "books", "jarvis_test_frontier_2026_11")
 KEY = ("loop", "depth", "cache", "context", "compress", "token", "norm",
        "residual", "attention", "mlp", "speculative", "draft", "entropy",
@@ -77,7 +80,9 @@ def main():
     names = list(directions)
     for i in range(len(names)):
         for j in range(i+1, len(names)):
-            A = [x for x in uniq if x["collection"] in COLLS]
+            # preferir atomos dos papers recem-indexados (novidade), nao os antigos
+            A = sorted([x for x in uniq if x["collection"] in COLLS],
+                       key=lambda x: ("frontier-2026-11-27" not in x["path"], x["path"]))
             left = next((x for x in A if any(t in x["atom"].lower() for t in buckets[names[i]])), None)
             right = next((x for x in A if any(t in x["atom"].lower() for t in buckets[names[j]]) and
                           x["path"] != (left or {}).get("path")), None)
