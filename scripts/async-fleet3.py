@@ -8,18 +8,25 @@ Correcao v3 (28/11 11:2xZ):
   - `kernels output` puxa o JSON de resultado (o `pull` so traz o codigo).
 """
 from __future__ import annotations
-import json, os, subprocess, time
+import json, subprocess, time
 from pathlib import Path
 
 HERE = Path('/home/nixos')
 EVENTS = HERE / 'work/hybrid/async-events.jsonl'
-PHONE = os.environ.get('TERMUX_PHONE_SSH','u0_a438@100.104.175.123')  # fallback local; env tem precedência
+PHONE = 'u0_a438@100.104.175.123'  # PC->celular no tailnet funciona (assimetria: celular->PC caiu)
 AW = '/data/data/com.termux/files/home/bin/auto-wake'
 BUS = '/data/data/com.termux/files/home/bin/bus-post'
 DIRECT = '/data/data/com.termux/files/home/bin/direct-msg'
 PRIN = 'improver-termux-fast@termux:ses_e52816aa7ffe4zi1iV7cJ8mvtc'
 MY_SID = 'ses_e52816aa7ffe4zi1iV7cJ8mvtc'  # sessionID explicito (codinome pode duplicar)
 JOBS = [
+    {
+        'id': 'F167-escala-parametros',
+        'kind': 'file',
+        'path': str(HERE / 'work/hybrid/f167-escala.json'),
+        'task': 'improver-termux-fast: termux/F167-corpus-escala-parametros',
+        'reason': 'F167: aguardando 12 bracos (d704/960/1216 × seed42/43 × controle/binario)',
+    },
     {
         'id': 'F166-corpus-mais-passos',
         'kind': 'file',
@@ -155,6 +162,28 @@ def f143_summary(out: Path, fname: str = 'f143-calibracao.json', label: str = 'F
                 + ('. GATE PRE-REGISTRADO PASSOU' if ok else '. GATE PRE-REGISTRADO NAO PASSOU — hipotese nao promovida, sem renegociar'))
     except Exception as e:
         return f'{label}: JSON presente mas falha ao aplicar gate: {type(e).__name__}: {e}'
+
+
+def f167_summary() -> str:
+    p = HERE / 'work/hybrid/f167-escala.json'
+    if not p.exists():
+        return 'F167: JSON ainda nao existe'
+    try:
+        rows = json.loads(p.read_text(encoding='utf-8'))['results']
+        parts, ok = [], True
+        for seed in (42, 43):
+            for dim in (704, 960, 1216):
+                r = next(x for x in rows if x['seed'] == seed and x['d'] == dim)
+                dv = round(r['binary']['val_loss'] - r['control']['val_loss'], 4)
+                da = round(r['binary']['acc'] - r['control']['acc'], 4)
+                good = dv <= 0.02 and da >= -0.01
+                ok = ok and good
+                parts.append(f's{seed}/d{dim} {dv:+.4f}/{da:+.4f} '
+                             f'VRAM={r["binary"]["vram"]}s')
+        return ('F167 MEDIDO (GPU, 960 passos, 20M ids): ' + ' | '.join(parts)
+                + ('. GATE PASSOU' if ok else '. GATE NAO PASSOU — sem renegociar'))
+    except Exception as e:
+        return f'F167: falha ao aplicar gate: {type(e).__name__}: {e}'
 
 
 def f166_summary() -> str:
@@ -296,6 +325,8 @@ def main() -> None:
                 job['reason'] = f160_summary()
             elif job['id'] == 'F166-corpus-mais-passos':
                 job['reason'] = f166_summary()
+            elif job['id'] == 'F167-escala-parametros':
+                job['reason'] = f167_summary()
             with EVENTS.open('a', encoding='utf-8') as f:
                 record(f, {'event': 'job_done', 'id': job['id'], 'ts': ts()})
             rc, out = phone(AW, 'complete', job['task'], '--principal', PRIN,
