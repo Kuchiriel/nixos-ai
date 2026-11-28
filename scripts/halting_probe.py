@@ -15,7 +15,15 @@ Correcoes medidas em 28/11 (F133):
   * o indice do KL no sweep: o primeiro passo nao tem KL contra um passo
     anterior. Deixar kl[:,0] = 0 fazia `(kl < eps).any(1)` ser True desde o
     indice 0, e `argmax` devolvia 0 para TODO eps — sweep identico e gate
-    incapaz de escolher profundidade menor. Agora kl[:,0] = inf.
+    incapaz de escolher profundidade menor. Agora kl[:,0] = inf;
+  * o --check mede 32768 tokens do held-out (nao 2048): com 2048 tokens o
+    delta contra o val_loss publicado (~200k tokens) chegava a 0,12-0,16 por
+    subamostra, e o remap ERRADO da delta ~7,7. Com 32768 tokens os tres
+    tamanhos medidos passam (deltas 0,0633 / 0,0838 / 0,0117);
+  * o sweep e STREAMING: guardar as trajetorias de todos os batches consumia
+    ~32 GB de RAM (195 batches x 4 loops x [4,256,10000] float32) e o host
+    matou o processo pelo OOM killer. Agora cada batch e processado e
+    descartado; a RAM fica limitada a um batch.
 """
 import argparse, json, math, time
 from pathlib import Path
@@ -112,7 +120,10 @@ def main():
     ap.add_argument("--out", default=str(B / "halting-probe.json"))
     ap.add_argument("--tol", type=float, default=0.10,
                     help="tolerancia |loss medida - val_loss publicado| no --check")
-    ap.add_argument("--check-tokens", type=int, default=2048)
+    ap.add_argument("--check-tokens", type=int, default=32768,
+                    help="tokens do held-out medidos no --check (32768 calibra a "
+                         "tolerancia: remap errado da delta ~7,7, subamostra de "
+                         "2048 tokens da delta ~0,12-0,16)")
     a = ap.parse_args()
 
     corpus = corpus_for_checkpoint(a.ckpt, a.npy)
@@ -171,7 +182,10 @@ def main():
     val = arr[int(len(arr) * 0.99):]
     L, bs, N = 256, 4, a.tokens
     forced = {}
-    traces = []
+    # Sweep accumulators (one per eps): the trajectories are processed batch by
+    # batch and discarded, so the RAM stays bounded by a single batch.
+    sweep_acc = {eps: {"loss": 0.0, "correct": 0, "count": 0, "depth_sum": 0.0}
+                 for eps in EPS}
     t0 = time.perf_counter()
     with torch.no_grad():
         for t in (1, 2, 3, 4):
@@ -189,7 +203,7 @@ def main():
                 # posicao preveem val[k+L] = y[:, -1]
                 vl += float(-lp.gather(1, y[:, -1:]).sum()); corr += int((lp.argmax(-1)==y[:, -1]).sum()); cnt += y.shape[0]
             forced[f"depth{t}"] = {"val_loss": round(vl/cnt, 4), "acc": round(corr/cnt, 4)}
-        # trajetoria completa (depth4) para readouts post-hoc
+        # Trajetoria completa (depth4), processada em streaming.
         for k in range(0, N, L * bs):
             xs = [val[k+j:k+j+L] for j in range(0, L*bs, L)]
             xs = [z for z in xs if len(z) == L]
@@ -198,11 +212,7 @@ def main():
             y = torch.tensor(np.asarray([val[k+j+1:k+j+1+L] for j in range(0, L*len(xs), L)]),
                              dtype=torch.long, device=a.device)
             _, tr = m(x, causal=True, max_loops=4, return_trace=True)
-            traces.append((torch.stack(tr, 1).float().cpu(), y[:, -1].cpu()))
-    sweep = []
-    for eps in EPS:
-        vl = corr = cnt = depth_sum = 0
-        for lgseq, yy in traces:
+            lgseq = torch.stack(tr, 1).float()          # [B, loops, L, V]
             lp = torch.log_softmax(lgseq, -1)
             p = lp.exp()
             kl = torch.full((p.shape[0], p.shape[1]), float("inf"))
@@ -210,13 +220,24 @@ def main():
                 # lgseq e' [B, loops, tokens, vocab]: soma sobre vocab e
                 # media sobre posicoes -> [B] (um KL por amostra e por loop)
                 kl[:, t] = (p[:, t] * (lp[:, t] - lp[:, t-1])).sum(-1).mean(1)
-            exit_t, _ = choose_exit_step(kl, eps)
-            chosen = lgseq[torch.arange(p.shape[0]), exit_t, -1, :]
-            lpc = torch.log_softmax(chosen, -1)
-            vl += float(-lpc.gather(1, yy[:, None]).sum())
-            corr += int((lpc.argmax(-1) == yy).sum()); cnt += yy.numel(); depth_sum += int(exit_t.sum()) + 1
-        sweep.append({"eps": eps, "avg_depth": round(depth_sum/cnt, 3),
-                      "val_loss": round(vl/cnt,4), "acc": round(corr/cnt,4)})
+            yy = y[:, -1]
+            for eps in EPS:
+                exit_t, _ = choose_exit_step(kl, eps)
+                chosen = lgseq[torch.arange(p.shape[0]), exit_t, -1, :]
+                lpc = torch.log_softmax(chosen, -1)
+                acc = sweep_acc[eps]
+                acc["loss"] += float(-lpc.gather(1, yy[:, None]).sum())
+                acc["correct"] += int((lpc.argmax(-1) == yy).sum())
+                acc["count"] += yy.numel()
+                acc["depth_sum"] += float(exit_t.sum()) + yy.numel()
+            del lgseq, lp, p, kl, tr
+    sweep = []
+    for eps in EPS:
+        acc = sweep_acc[eps]
+        cnt = max(acc["count"], 1)
+        sweep.append({"eps": eps, "avg_depth": round(acc["depth_sum"]/cnt, 3),
+                      "val_loss": round(acc["loss"]/cnt, 4),
+                      "acc": round(acc["correct"]/cnt, 4)})
     base = forced["depth4"]
     valid = [s for s in sweep if s["val_loss"] <= base["val_loss"]+0.01
              and s["acc"] >= base["acc"]-0.01 and s["avg_depth"] <= 3.2]
@@ -224,6 +245,7 @@ def main():
     r = {"checkpoint": a.ckpt, "corpus": corpus, "remap_sha": remap_fingerprint(corpus),
          "d": a.d, "tokens": cnt, "device": a.device,
          "forced": forced, "sweep": sweep, "chosen": chosen,
+         "streaming_sweep": True,
          "gate": "PASSA se chosen nao nulo (F123)", "seconds": round(time.perf_counter()-t0,1)}
     Path(a.out).write_text(json.dumps(r, indent=2)+"\n")
     print("RESULT " + json.dumps({"chosen": chosen, "gate": r["gate"]}))

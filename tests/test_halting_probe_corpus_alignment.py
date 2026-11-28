@@ -91,6 +91,11 @@ class HaltingProbeCorpusAlignmentTests(unittest.TestCase):
         self.assertIn("probe --check REPROVADO", source)
         self.assertIn("no_train", source)
 
+    def test_check_default_samples_enough_tokens_to_calibrate_the_tolerance(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        # 2048 tokens dava delta 0,12-0,16 por subamostra; 32768 da 0,01-0,08.
+        self.assertIn('"--check-tokens", type=int, default=32768', source)
+
 
 if __name__ == "__main__":
     unittest.main()
