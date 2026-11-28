@@ -59,6 +59,15 @@ class HaltingProbeSweepTests(unittest.TestCase):
         self.assertNotIn("kl = torch.zeros(p.shape[0], p.shape[1])", source)
         self.assertIn("choose_exit_step(kl, eps)", source)
 
+    def test_sweep_is_streaming_and_does_not_keep_every_trajectory(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        # Guardar as trajetorias de todos os batches consumia ~32 GB de RAM e
+        # o host matou o processo pelo OOM killer.
+        self.assertNotIn("traces.append(", source)
+        self.assertIn("sweep_acc = {eps:", source)
+        self.assertIn("streaming_sweep", source)
+        self.assertIn("del lgseq, lp, p, kl, tr", source)
+
 
 if __name__ == "__main__":
     unittest.main()
