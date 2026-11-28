@@ -23,10 +23,10 @@ Objetivo: distinguir hardcodes **intencionais/canônicos** de hardcodes **aciden
 ## Check rápido (evidência)
 ```bash
 cd ~/projects/nixos-ai
-git ls-files '*.py' '*.sh' '*.mjs' '*.js' '*.nix' '*.json' | \
-  xargs grep -lE '100\.104\.175\.123|100\.121\.100\.103' | sort
+./scripts/check-hardcodes.sh
+# esperado (28/11): total_hits=13 allowlisted=13 outside_allowlist=0
 ```
-Comparar saída com allowlist acima; diferença = candidato a correção/documentação.
+O script `scripts/check-hardcodes.sh` aplica a allowlist canônica; diferença = candidato a correção/documentação.
 
 ## Números (sweep 2026-11-28)
 - Hits totais IP/hostname: 644 (inclui docs/histórico).
