@@ -199,8 +199,26 @@ pre.diff{
 </header>
 
 <main>
+  <!-- ══ MISSÃO ══ -->
+  <section class="sec" id="tab-mission">
+    <h2>mission control <span class="grow"></span><span class="tiny dim" id="missionTs"></span> <button class="ghost tiny" id="btnMission">↻</button></h2>
+    <div class="abstats" id="missionStats"></div>
+    <div class="grid two" style="margin-top:10px">
+      <div class="card"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">saúde / links</h3><div id="missionHealth" class="tiny"></div></div>
+      <div class="card"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">stale / atenção</h3><div id="missionStale" class="tiny"></div></div>
+    </div>
+    <div class="grid two" style="margin-top:10px">
+      <div class="card"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">falhas recentes</h3><div id="missionFails" class="feed" style="max-height:28vh"></div></div>
+      <div class="card"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">eventos recentes</h3><div id="missionEv" class="feed" style="max-height:28vh"></div></div>
+    </div>
+    <div class="card" style="margin-top:10px"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">playground / lab</h3>
+      <div class="tiny dim">Acesso rápido: <a href="/lab" target="_blank">/lab</a> · <a href="/house" target="_blank">/house</a> · <a href="/api/mission" target="_blank">/api/mission</a></div>
+      <div class="tiny dim" style="margin-top:6px">Baseado em papers indexados: AgentGUI (2607.26300), AgentOps (2411.05285), Agent System Operations (2606.01581), Governance-Aware Telemetry (2604.05119) em <code>~/Books/papers/agent-hub-mission-control-2026-11-28/</code>.</div>
+    </div>
+  </section>
+
   <!-- ══ AGENTES ══ -->
-  <section class="sec" id="tab-agentes">
+  <section class="sec hidden" id="tab-agentes">
     <h2>agentes <span class="grow"></span>
       <span class="tiny dim" id="agCount"></span>
       <button class="ghost tiny" id="btnReload">↻ recarregar</button>
@@ -327,6 +345,7 @@ const toast = (m) => { const t=$('#toast'); t.textContent=m; t.classList.add('on
 
 /* ── tabs ───────────────────────────────────────────── */
 const TABS = [
+  {id:'mission', ic:'🛰️', label:'missão'},
   {id:'agentes', ic:'🤖', label:'agentes'},
   {id:'pulso',   ic:'📡', label:'pulso'},
   {id:'ab',      ic:'⚖️', label:'A/B'},
@@ -335,7 +354,7 @@ const TABS = [
   {id:'pend',    ic:'📌', label:'pendências'},
   {id:'casa',    ic:'🏠', label:'casa'},
 ];
-let tab = localStorage.getItem('mcTab') || 'agentes';
+let tab = localStorage.getItem('mcTab') || 'mission';
 function renderTabs(){
   $('#tabs').innerHTML = TABS.map(t=>`<button data-tab="${t.id}" class="${t.id===tab?'on':''}"><span class="ic">${t.ic}</span><span>${t.label}</span>${t.id==='pulso'&&evUnread?'<span class="badge">'+evUnread+'</span>':''}</button>`).join('');
   $$('#tabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
@@ -348,6 +367,7 @@ function setTab(id){ tab=id; localStorage.setItem('mcTab',id); renderTabs();
   if(id==='pend') loadPending();
   if(id==='casa') loadState();
   if(id==='ab') loadAB();
+  if(id==='mission') loadMission();
 }
 
 /* ── header pills ───────────────────────────────────── */
@@ -608,6 +628,31 @@ async function abControl(action, model, level){
   const j = await r.json().catch(()=>({error:'resposta inválida'}));
   toast(r.ok ? (j.message||'ok') : (j.error||'erro'));
   setTimeout(loadAB, 400);
+}
+
+/* ── mission ────────────────────────────────────────── */
+async function loadMission(){
+  try{
+    const d = await (await api('/api/mission')).json();
+    $('#missionTs').textContent = d.ts ? new Date(d.ts).toLocaleTimeString('pt-BR') : '';
+    const c = d.counts||{};
+    $('#missionStats').innerHTML = `
+      <div><b>${c.total||0}</b><span>agentes</span></div>
+      <div><b>${c.roster||0}</b><span>roster</span></div>
+      <div><b class="okc">${c.busy||0}</b><span>busy</span></div>
+      <div><b class="warnc">${c.idle||0}</b><span>idle</span></div>
+      <div><b class="failc">${c.ghost||0}</b><span>ghost</span></div>`;
+    const srv = d.servers||{};
+    $('#missionHealth').innerHTML = `<div>opencode: <b class="${srv.opencode?'okc':'failc'}">${srv.opencode?'OK':'OFF'}</b></div>
+      <div style="margin-top:6px">links: <a href="/lab" target="_blank">/lab</a> · <a href="/house" target="_blank">/house</a> · <a href="/api/mission" target="_blank">api</a></div>
+      <div class="tiny dim" style="margin-top:6px">${esc((d.papers&&d.papers.note)||'')}</div>`;
+    const stale = d.stale||[];
+    $('#missionStale').innerHTML = stale.length ? stale.map(x=>`<div style="padding:3px 0;border-bottom:1px dashed #1c2431"><b>${esc(x.name||'?')}</b> <span class="tag ${x.status}">${esc(x.status||'')}</span> <span class="dim">${Math.round((x.age_s||0)/60)}m</span><div class="dim">${esc((x.model||'').split('/').pop()||'')}</div></div>`).join('') : '<span class="dim">nenhum stale no roster</span>';
+    const fails = d.failures||[];
+    $('#missionFails').innerHTML = fails.length ? fails.map(e=>`<div class="ev k-fail"><span class="t">${hhmm(e.ts)}</span><span class="k">${esc(e.kind||'fail')}</span><span class="m">${esc(e.text||'')}</span></div>`).join('') : '<span class="dim">sem falhas recentes</span>';
+    const evs = d.recentEvents||[];
+    $('#missionEv').innerHTML = evs.length ? evs.map(e=>`<div class="ev k-${esc(e.kind||'ok')}"><span class="t">${hhmm(e.ts)}</span><span class="k">${esc(e.kind||'')}</span><span class="m">${esc((e.text||'').slice(0,160))}</span></div>`).join('') : '<span class="dim">sem eventos</span>';
+  }catch(e){ showErr('loadMission', e); }
 }
 
 /* ── bus / casa ─────────────────────────────────────── */

@@ -130,15 +130,21 @@ def main():
         if key in seen_claim: continue
         seen_claim.add(key); dedup.append(c)
     pairs = dedup
-    pairs.sort(key=lambda p: (not p["promote"], p["availability_paths"]))
+    # ranking: promover primeiro, depois menor disponibilidade, depois actionability
+    pairs.sort(key=lambda p: (not p["promote"], p["availability_paths"], -p["actionability"]))
+    top_pairs = pairs[:a.top]
+    recommended = [p["id"] for p in top_pairs if p["promote"]][:3]
     res = {"event": "alien_lacuna",
-           "atom_mode": "heuristic (LLM local apenas quando GPU livre; USE_LLM=0 agora)", "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+           "atom_mode": "heuristic (LLM local apenas quando GPU livre; USE_LLM=0 agora)",
+           "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "chunks": len(chunks), "atoms": len(uniq),
            "directions": directions, "audit_discarded": len(atoms)-len(uniq),
            "criterios_pre_registrados": {"actionability": "contem metrica/baseline/gate/custo",
                                           "availability_paths_max": AVAIL_MAX},
-           "hypotheses": pairs[:a.top],
-           "promovidas": sum(1 for p in pairs[:a.top] if p["promote"])}
+           "recommended_next": recommended,
+           "rule": "hipótese != evidência; promover só com gate pré-registrado (métrica, baseline, limite, custo, 3 tamanhos)",
+           "hypotheses": top_pairs,
+           "promovidas": sum(1 for p in top_pairs if p["promote"])}
     Path(a.out).write_text(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
     print(json.dumps({"chunks": len(chunks), "atoms": len(uniq),
                       "directions": len(directions), "promovidas": res["promovidas"]}))

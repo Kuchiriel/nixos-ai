@@ -1168,6 +1168,27 @@ async function handler(req, res) {
     }
     return send(400, JSON.stringify({ error: 'acao desconhecida: ' + action }), 'application/json');
   }
+  if (req.method === 'GET' && url.pathname === '/api/mission') {
+    const j = await agentsJSON().catch(e => ({ servers: { opencode: false }, agents: [], error: String(e) }));
+    const agents = j.agents || [];
+    const now = Date.now();
+    const byStatus = agents.reduce((acc,a)=>{ acc[a.status||'unknown']=(acc[a.status||'unknown']||0)+1; return acc; },{});
+    const recentEvents = EVBUF.slice(-30).reverse();
+    const failures = EVBUF.filter(e=>['fail','error'].includes(String(e.kind||'').toLowerCase())).slice(-10).reverse();
+    const stale = agents.filter(a=>a.updated && (now-a.updated)>30*60*1000 && !a.unclaimed).slice(0,10).map(a=>({name:a.codename||a.name, session:a.session, age_s:Math.round((now-a.updated)/1000), status:a.status, model:a.model}));
+    const summary = {
+      ok: true,
+      ts: now,
+      servers: j.servers || {},
+      counts: { total: agents.length, roster: agents.filter(a=>!a.unclaimed).length, unclaimed: agents.filter(a=>a.unclaimed).length, ...byStatus },
+      stale,
+      failures,
+      recentEvents,
+      links: { lab:'/lab', house:'/house', agents:'/api/agents', bus:'/api/bus?limit=40' },
+      papers: { note:'AgentGUI/AgentOps/AgentSysOps/GovernanceTelemetry indexed in Books/papers/agent-hub-mission-control-2026-11-28' }
+    };
+    return send(200, JSON.stringify(summary), 'application/json');
+  }
   if (req.method === 'GET' && url.pathname === '/api/agents') { const j = await agentsJSON().catch(e => ({ servers: { opencode: false }, agents: [], error: String(e) })); return send(200, JSON.stringify(j), 'application/json'); }
   if (req.method === 'GET' && url.pathname === '/api/transcript') {
     if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
