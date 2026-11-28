@@ -167,6 +167,43 @@ def test_every_classified_failure_is_rotatable_or_explicitly_not() -> None:
         assert classe in mod.ROTATE_CLASSES, (erro, classe)
 
 
+# (28/11, medido no log inteiro: 115 erros de provider, spectrum real) estes
+# tres textos caiam em OTHER: o limite diario do provider, a cota do llm7 e o
+# endpoint local fora do ar. Os dois primeiros sao cota e trocam de
+# provider; o terceiro NAO troca (todos os ids locais apontam para a mesma
+# porta), entao a classe ENDPOINT fica fora de ROTATE_CLASSES de proposito.
+@pytest.mark.parametrize(
+    "erro,classe",
+    [
+        ("AI.Error: Rate limit exceeded: free-models-per-day. Add 10 credits "
+         "to unlock 1000 free models per day.", "QUOTA"),
+        ("AI.Error: Your free token allowance has been reached. Please retry "
+         "in 3600 seconds.", "QUOTA"),
+        ("AI.Error: ECONNREFUSED: Unable to connect. Is the computer able to "
+         "access the url?", "ENDPOINT"),
+    ],
+)
+def test_classification_covers_the_last_measured_texts(erro: str, classe: str) -> None:
+    """(28/11) Os tres ultimos textos do spectrum real: nenhum pode ficar em
+    OTHER, e o de endpoint fora nao pode cair na rotacao."""
+    mod = _guard()
+    assert mod.classify(erro)[0] == classe
+
+
+def test_endpoint_down_does_not_rotate_the_model() -> None:
+    """(28/11) Endpoint local fora do ar: trocar de modelo nao resolve, porque
+    todos os ids locais apontam para a mesma porta. A classe ENDPOINT fica
+    fora de ROTATE_CLASSES de proposito."""
+    mod = _guard()
+    classe = mod.classify("AI.Error: ECONNREFUSED: Unable to connect.")[0]
+    assert classe == "ENDPOINT"
+    assert classe not in mod.ROTATE_CLASSES
+    # as duas de cota, sim, trocam de provider
+    for erro in ("AI.Error: Rate limit exceeded: free-models-per-day.",
+                 "AI.Error: Your free token allowance has been reached."):
+        assert mod.classify(erro)[0] in mod.ROTATE_CLASSES
+
+
 def test_provider_and_model_are_recovered_from_the_error_text() -> None:
     """(26/11) Nas linhas do 2.2.6 providerID= e modelID= nao existem (medido:
     0 de 63 linhas ERROR tem qualquer um dos dois), entao o provider e o model

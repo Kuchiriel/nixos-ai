@@ -57,6 +57,11 @@ COOLDOWN_SEC = 900
 # "RATE_LIMIT" — duas strings diferentes. Resultado: a rotacao automatica de
 # modelo (o commit 86a5cc12, 15/11) NUNCA rodou, porque a condicao nunca era
 # verdadeira. Agora a lista e' explicita e compartilhada com o classificador.
+# (28/11, medido) ENDPOINT: o endpoint local esta fora do ar. Trocar de
+# modelo NAO resolve (todos os ids locais apontam para a mesma porta), e a
+# rotacao automatica gastaria os 2 tentativas do agent-model.py sem chance.
+# A classe fica FORA de ROTATE_CLASSES de proposito: o conserto e' subir o
+# endpoint, nao trocar de modelo.
 ROTATE_CLASSES = ("RATE", "RATE_LIMIT", "QUOTA", "MODEL")
 
 # classificação: (padrão no texto do erro, classe, dica acionável)
@@ -120,6 +125,21 @@ CLASSES = (
     ("Service temporarily overloaded", "RATE",
      "provider sobrecarregado (503/overloaded); transitorio, "
      "espere e tente de novo ou troque de provider"),
+    # (28/11, medido no log inteiro, lane endpoint-ovhcloud) estes tres
+    # textos caiam em OTHER no spectrum real de 115 erros de provider:
+    # "Rate limit exceeded: free-models-per-day" (limite diario do
+    # provider, nao do minuto), "Your free token allowance has been reached"
+    # (cota do llm7) e "ECONNREFUSED: Unable to connect" (endpoint local
+    # fora do ar). Os dois primeiros sao cota: trocam de provider. O
+    # terceiro e' endpoint local parado: trocar de modelo NAO resolve,
+    # porque todos os ids locais apontam para a mesma porta.
+    ("Rate limit exceeded: free-models-per-day", "QUOTA",
+     "limite diario do provider (free-models-per-day); troque de provider"),
+    ("Your free token allowance has been reached", "QUOTA",
+     "cota do provider esgotada (free token allowance); troque de provider"),
+    ("ECONNREFUSED", "ENDPOINT",
+     "endpoint do provider nao responde (conexao recusada); o provider "
+     "local esta fora do ar, trocar de modelo nao resolve: verifique a unit"),
     ("AI_APICallError", "API",
      "erro de API do provider; veja o log"),
 )
