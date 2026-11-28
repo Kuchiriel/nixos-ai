@@ -58,6 +58,15 @@ const MACH_PARTS={
  logits:{t:'Logits → próximo token',m:'Argmax/softmax sobre 10000 logits produz o próximo id; é a única saída visível da máquina.',f:'p = softmax(logits)',code:'loop de geração',i:'logits',o:'id seguinte',store:'—',loop:'realimenta o token de entrada',nums:[['temperatura','1 (sem amostragem no playground)','REAL']],gate:'playground sem teacher forcing'}
 };
 const MACH_COL={in:'#1f6feb',loop:'#8957e5',out:'#238636',head:'#d29922',mem:'#484f58',flow:'#f0883e'};
+const MACH_AUDIT={
+ beta:'F91 cuidado: beta e alpha sao nn.Parameter aprendiveis (scale-loop-ablation.py:43/101), nao hiperparametros fixos; o gate compara com um beta que o modelo aprendeu.',
+ pos:'F134 reclassificada: pos4096 com seq256 nunca visita posicoes 257-4095; e smoke test de implementacao, nao gate de contexto longo (exige seq>=4096).',
+ loop:'F130 elastic (condicionamento por indice do loop, init zero) esta implementado mas NUNCA treinado — oportunidade perdida desde 27/11.',
+ attn:'F96/F106 encerradas: compressao KV 4,95% da VRAM e decode 567x acima do orçamento; nao reabrir sem kernel GPU medido.',
+ kv:'Cache real implementado e validado por equivalencia em 24/11 (commit 15441d6e); custo de Kok foi medido, mas tempo real de decode nao.',
+ b67:'F123 halting: curva forcada depth1-4 + sweep epsilon prontos em halting_probe.py, mas NUNCA executados (F133).',
+ head:'F102 pre-registrado antes do launch: proxy de logits = vocab 257/10000 = 2,57% (<=20%); nao e tempo/memoria medidos.'
+};
 let machTimer=null;
 function machExtrude(x,y,w,h,col){
  const dx=11,dy=-9;
@@ -148,6 +157,7 @@ function machDetail(id,s){
  h+=`<b>Entra:</b> ${p.i}　<b>Sai:</b> ${p.o}　<b>Fica em:</b> ${p.store}　<b>Loop:</b> ${p.loop}<br>`;
  h+=`<b>Números:</b> `+p.nums.map(n=>`${n[0]}=${n[1]}${badge(n[2])}`).join(' · ');
  h+=`<br><b>Gate:</b> ${p.gate}`;
+ if(MACH_AUDIT[id]) h+=`<br><b style=\"color:#f0883e\">Auditoria 28/11:</b> ${MACH_AUDIT[id]}`;
  h+=`<br><span style="color:#8b949e">Marco atual: ${s.label} · val=${s.val===null?'não medido':s.val} · acc=${s.acc===null?'não medido':s.acc} · ${s.steps.toLocaleString()} passos</span>`;
  document.getElementById('machDetail').innerHTML=h;
 }
