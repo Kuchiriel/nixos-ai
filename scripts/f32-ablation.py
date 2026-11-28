@@ -45,6 +45,8 @@ def main():
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--warmup", type=int, default=0)
+    ap.add_argument("--wd", type=float, default=0.01,
+                    help="weight decay do AdamW (padrao 0,01; H2 usa 1.0)")
     ap.add_argument("--no-ss", action="store_true")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--ckpt", default="")
@@ -91,7 +93,8 @@ def main():
         print(json.dumps({"qat": "ternary_STE", "targets": ["head","tok"]}), flush=True)
     # pos do ScaleLM atual e' 512; seq 256 cabe
     opt = torch.optim.Adagrad(model.parameters(), lr=0.01) if False else \
-          torch.optim.AdamW(model.parameters(), lr=a.lr, fused=(a.device=="cuda"))
+          torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=a.wd,
+                            fused=(a.device=="cuda"))
     t0 = time.perf_counter()
     model.train()
     for step in range(1, a.steps + 1):
