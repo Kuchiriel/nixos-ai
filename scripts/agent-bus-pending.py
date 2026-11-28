@@ -6,7 +6,7 @@ para ACORDAR o agente certo sem depender de prompt do dono: uma mensagem
 no bus endereçada ao codinome de um agente (ou uma claim que se sobrepõe
 aos arquivos dele) tem que virar um wake.
 
-O bus é lido pelo MCP local (http://100.121.100.103:8765/mcp), que tem o
+O bus é lido pelo MCP local (COORD_MCP_URL, default http://127.0.0.1:8765/mcp), que tem o
 CACHE do GitHub dentro (o GitHub API tem rate limit de 60/h por token:
 polling direto a cada ciclo estoura). A unit escuta SÓ no IP do tailnet:
 o loopback (127.0.0.1:8765) recusa a conexão, medido em 25/11.
@@ -15,7 +15,7 @@ SAÍDA: JSON no stdout — lista de {"to": <codinome|lane>, "text": ...}.
 Erro → imprime [] e sai 0 (o watcher nunca deve quebrar por causa do bus).
 
 Uso:
-  python3 scripts/agent-bus-pending.py [--url http://100.121.100.103:8765/mcp]
+  python3 scripts/agent-bus-pending.py [--url ${COORD_MCP_URL:-http://127.0.0.1:8765/mcp}]
                                        [--agent <codinome>]
 """
 

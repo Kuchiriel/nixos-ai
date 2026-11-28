@@ -75,7 +75,7 @@ def _post(url: str, payload: dict, timeout: int = 25):
 
 # (19/11, medido) A FONTE DA VERDADE DO ENDERECO EO O PROPRIO SOCKET.
 # `home-manager/modules/services/opencode-serve.nix` sobe o serve com
-# `--hostname 100.121.100.103 --port 4599` (escuta SO no IP do tailnet), mas o
+# `--hostname ${TAILNET_HOST} --port 4599` (escuta SO no IP do tailnet), mas o
 # agent-config.json declara http://127.0.0.1:4599. Resultado medido: TODA
 # entrega por API da frota morria com `URLError: [Errno 111] Connection
 # refused` enquanto o bus (outro caminho) funcionava — a frota parecia viva e

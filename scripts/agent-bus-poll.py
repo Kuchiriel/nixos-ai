@@ -10,7 +10,7 @@ sobreposto).
 COMO USAR (no Windows, a cada ~60 s, num loop do seu scheduler):
     python agent-bus-poll.py --codename matheus-perf \
         --files "tools/coord_servidor.ps1,PROP_FUNDEDNEXT_MATHEUS/**" \
-        --url http://100.121.100.103:8765/mcp
+        --url ${COORD_MCP_URL:-http://127.0.0.1:8765/mcp}
     → imprime JSON [{"to": ..., "text": ...}] com o que é seu.
 
 Aí o teu agente (ou o teu watcher local) acorda a sessão com esse texto —

@@ -434,7 +434,7 @@ def build_server():
                        confirm: str = "") -> str:
         """Acesso SEGURO aos arquivos do CELULAR via phone-fs (Termux).
 
-        O celular expoe SSH na tailnet (100.104.175.123:8022, key-only) e um
+        O celular expoe SSH na tailnet (TERMUX_PHONE_SSH/TERMUX_PHONE_PORT, key-only) e um
         tool proprio (~/bin/phone-fs) com politica embutida: leitura com
         allowlist, WhatsApp/Databases/.ssh/keystore/Android/data NUNCA, e
         MUTACAO SO por propose -> apply (move pra quarentena no SSD, com
@@ -456,9 +456,11 @@ def build_server():
             return ("coord_phonefs: 'apply' exige 'confirm' com o token do plano. "
                     "O dono precisa aprovar (o token vem do 'plans' no celular). "
                     "Nenhum arquivo e movido sem isso.")
-        cmd = ["ssh", "-p", "8022", "-o", "BatchMode=yes", "-o",
+        _phone = os.environ.get("TERMUX_PHONE_SSH", "u0_a438@100.104.175.123")
+        _port = os.environ.get("TERMUX_PHONE_PORT", "8022")
+        cmd = ["ssh", "-p", _port, "-o", "BatchMode=yes", "-o",
                "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
-               "u0_a438@100.104.175.123", "~/bin/phone-fs " + act]
+               _phone, "~/bin/phone-fs " + act]
         if act in ("find", "stat", "cat"):
             cmd[-1] += " '" + str(alvo).replace("'", "'\\''") + "'"
         elif act == "propose":

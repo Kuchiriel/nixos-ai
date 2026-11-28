@@ -27,7 +27,7 @@ COMO RODAR:
     # exposto na tailnet (host=IP_TAILNET) => http://<ip>:8766/mcp
 
 CLIENTE (opencode, outra máquina):
-    {"type": "remote", "url": "http://100.121.100.103:8766/mcp", "enabled": true}
+    {"type": "remote", "url": "http://${TAILNET_HOST}:8766/mcp", "enabled": true}
     → as tools aparecem como `jarvis_*` (prefixo do server key).
 
 REQUISITO: `fastmcp` no python do serviço (medido: 3.2.3 no perfil do JARVIS).
