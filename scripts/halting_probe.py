@@ -15,7 +15,11 @@ Correcoes medidas em 28/11 (F133):
   * o indice do KL no sweep: o primeiro passo nao tem KL contra um passo
     anterior. Deixar kl[:,0] = 0 fazia `(kl < eps).any(1)` ser True desde o
     indice 0, e `argmax` devolvia 0 para TODO eps — sweep identico e gate
-    incapaz de escolher profundidade menor. Agora kl[:,0] = inf.
+    incapaz de escolher profundidade menor. Agora kl[:,0] = inf;
+  * o --check mede 32768 tokens do held-out (nao 2048): com 2048 tokens o
+    delta contra o val_loss publicado (~200k tokens) chegava a 0,12-0,16 por
+    subamostra, e o remap ERRADO da delta ~7,7. Com 32768 tokens os tres
+    tamanhos medidos passam (deltas 0,0633 / 0,0838 / 0,0117).
 """
 import argparse, json, math, time
 from pathlib import Path
@@ -112,7 +116,10 @@ def main():
     ap.add_argument("--out", default=str(B / "halting-probe.json"))
     ap.add_argument("--tol", type=float, default=0.10,
                     help="tolerancia |loss medida - val_loss publicado| no --check")
-    ap.add_argument("--check-tokens", type=int, default=2048)
+    ap.add_argument("--check-tokens", type=int, default=32768,
+                    help="tokens do held-out medidos no --check (32768 calibra a "
+                         "tolerancia: remap errado da delta ~7,7, subamostra de "
+                         "2048 tokens da delta ~0,12-0,16)")
     a = ap.parse_args()
 
     corpus = corpus_for_checkpoint(a.ckpt, a.npy)
