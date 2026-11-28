@@ -171,6 +171,11 @@ pre.diff{
 .busline{padding:4px 0;border-bottom:1px dashed #1c2431}
 .busline .who{color:var(--idx);font-weight:700}
 .busline .kind{color:var(--warn)}
+.chat-msg{padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin:6px 0;background:#101722}
+.chat-msg.me{border-color:#2f5c96;background:#122033}
+.chat-msg .head{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--dim);margin-bottom:4px}
+.chat-msg .who{color:var(--idx);font-weight:700}
+.chat-msg .body{white-space:pre-wrap;word-break:break-word;font-size:12px}
 .toast{
   position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--dock) + var(--tabs) + 14px);
   z-index:70;background:#1b2230;border:1px solid var(--line);border-radius:99px;
@@ -214,6 +219,25 @@ pre.diff{
     <div class="card" style="margin-top:10px"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">playground / lab</h3>
       <div class="tiny dim">Acesso rápido: <a href="/lab" target="_blank">/lab</a> · <a href="/house" target="_blank">/house</a> · <a href="/api/mission" target="_blank">/api/mission</a></div>
       <div class="tiny dim" style="margin-top:6px">Baseado em papers indexados: AgentGUI (2607.26300), AgentOps (2411.05285), Agent System Operations (2606.01581), Governance-Aware Telemetry (2604.05119) em <code>~/Books/papers/agent-hub-mission-control-2026-11-28/</code>.</div>
+    </div>
+  </section>
+
+  <!-- ══ CHAT ══ -->
+  <section class="sec hidden" id="tab-chat">
+    <h2>chat / ops <span class="grow"></span><span class="tiny dim" id="chatStat"></span>
+      <button class="ghost tiny" id="btnChat">↻</button>
+    </h2>
+    <div class="card" style="margin-bottom:10px">
+      <div class="chips" id="chatChips"></div>
+      <div class="tiny dim" style="margin-top:6px">Slack-like: escolha alvo, envie mensagem, acompanhe feed. Use <code>@nome</code> no texto ou selecione o alvo.</div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="chatFeed" class="feed" style="max-height:52vh;padding:10px"></div>
+      <div style="border-top:1px solid var(--line);padding:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <select id="chatTarget" style="max-width:220px"></select>
+        <input id="chatText" placeholder="Mensagem para o agente... (Enter envia)" style="flex:1;min-width:180px">
+        <button class="primary" id="chatSend">Enviar</button>
+      </div>
     </div>
   </section>
 
@@ -346,6 +370,7 @@ const toast = (m) => { const t=$('#toast'); t.textContent=m; t.classList.add('on
 /* ── tabs ───────────────────────────────────────────── */
 const TABS = [
   {id:'mission', ic:'🛰️', label:'missão'},
+  {id:'chat',    ic:'💬', label:'chat'},
   {id:'agentes', ic:'🤖', label:'agentes'},
   {id:'pulso',   ic:'📡', label:'pulso'},
   {id:'ab',      ic:'⚖️', label:'A/B'},
@@ -368,6 +393,7 @@ function setTab(id){ tab=id; localStorage.setItem('mcTab',id); renderTabs();
   if(id==='casa') loadState();
   if(id==='ab') loadAB();
   if(id==='mission') loadMission();
+  if(id==='chat') loadChat();
 }
 
 /* ── header pills ───────────────────────────────────── */
@@ -653,6 +679,63 @@ async function loadMission(){
     const evs = d.recentEvents||[];
     $('#missionEv').innerHTML = evs.length ? evs.map(e=>`<div class="ev k-${esc(e.kind||'ok')}"><span class="t">${hhmm(e.ts)}</span><span class="k">${esc(e.kind||'')}</span><span class="m">${esc((e.text||'').slice(0,160))}</span></div>`).join('') : '<span class="dim">sem eventos</span>';
   }catch(e){ showErr('loadMission', e); }
+}
+
+/* ── chat (Slack-like) ─────────────────────────────── */
+const CHAT_QUICK = [
+  {label:'status', text:'status rápido: o que você está fazendo agora?'},
+  {label:'próximo passo', text:'qual o próximo passo concreto e qual evidência você vai gerar?'},
+  {label:'resumo', text:'me dê um resumo curto do estado atual com arquivos/evidências.'},
+  {label:'@todos', text:'@todos atualização curta de status e bloqueios.'},
+];
+let CHAT_CACHE = [];
+function renderChatChips(){
+  const el = $('#chatChips'); if(!el) return;
+  el.innerHTML = CHAT_QUICK.map((c,i)=>`<button class="chip" data-i="${i}">${esc(c.label)}</button>`).join('');
+  $$('#chatChips .chip').forEach(b=>b.onclick=()=>{ const c=CHAT_QUICK[+b.dataset.i]; $('#chatText').value=c.text; $('#chatText').focus(); });
+}
+async function loadChatTargets(){
+  try{
+    const d = await (await api('/api/agents')).json();
+    const agents = (d.agents||[]).filter(a=>!a.unclaimed);
+    const sel = $('#chatTarget');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">selecionar alvo...</option>' + agents.map(a=>`<option value="${esc(a.codename||a.name)}">${esc(a.codename||a.name)} · ${esc((a.model||'').split('/').pop()||'-')}</option>`).join('');
+    if(cur) sel.value = cur;
+  }catch(e){}
+}
+function renderChat(){
+  const f = $('#chatFeed'); if(!f) return;
+  const items = CHAT_CACHE.slice(0,120);
+  $('#chatStat').textContent = items.length + ' msgs';
+  f.innerHTML = items.map(m=>{
+    const mine = (m.from||'').toLowerCase() === 'voce' || (m.from||'').toLowerCase() === 'você';
+    return `<div class="chat-msg ${mine?'me':''}"><div class="head"><span class="t">${hhmm(m.ts)}</span><span class="who">${esc(m.from||'?')}</span>${m.to?`<span class="dim">→ ${esc(m.to)}</span>`:''}<span class="tag">${esc(m.kind||'msg')}</span></div><div class="body">${esc(m.text||'')}</div></div>`;
+  }).join('') || '<div class="tiny dim">sem mensagens ainda</div>';
+  f.scrollTop = 0;
+}
+async function loadChat(){
+  renderChatChips(); await loadChatTargets();
+  try{
+    const d = await (await api('/api/bus?limit=60')).json();
+    const items = (d.items||[]).map(b=>({ts:b.ts, from:b.from||b.who||'?', to:b.to||'', kind:b.kind||b.path||'bus', text:b.text||b.body||''}));
+    CHAT_CACHE = items.reverse();
+    renderChat();
+  }catch(e){ showErr('loadChat', e); }
+}
+async function sendChat(){
+  const name = ($('#chatTarget').value || $('#cmdTarget').value || '').trim();
+  const text = ($('#chatText').value || '').trim();
+  if(!name){ toast('escolha um alvo'); return; }
+  if(!text){ toast('escreva uma mensagem'); return; }
+  $('#chatSend').disabled = true;
+  try{
+    const r = await api('/api/wake', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, text})});
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok || j.ok===false){ toast('falha: '+(j.error||r.status)); }
+    else { toast('enviado para '+name); CHAT_CACHE.unshift({ts:Date.now(), from:'você', to:name, kind:'wake', text}); $('#chatText').value=''; renderChat(); }
+  }catch(e){ toast('falha: '+e); }
+  $('#chatSend').disabled = false;
 }
 
 /* ── bus / casa ─────────────────────────────────────── */
