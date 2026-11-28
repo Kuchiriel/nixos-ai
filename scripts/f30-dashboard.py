@@ -59,7 +59,7 @@ button{cursor:pointer;background:#21262d;color:#e6edf3;border:1px solid #30363d;
 input{background:#0d1117;color:#e6edf3;border:1px solid #30363d;padding:7px;border-radius:5px;width:60%}
 </style></head><body>
 <h1>Laboratório do LLM do zero — linha do tempo</h1>
-<div class="sub">Dados: """ + str(len(points)) + """ medições de """ + str(len(set(p['front'] for p in points))) + """ frentes · nitro-v15 · hardware modesto</div>
+<div class="sub">Dados: """ + str(len(points)) + """ medições de """ + str(len(set(p['front'] for p in points))) + """ frentes · host local · hardware modesto</div>
 <div class="card"><b>Escolha o eixo:</b>
  <button onclick="plot('val')">val loss</button>
  <button onclick="plot('acc')">acurácia</button>

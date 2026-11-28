@@ -26,3 +26,10 @@ Maioria é host-specific esperado (`hosts/nitro-v15/*`, `flake.nix`, módulos Ni
 1. Converter fallbacks literais para defaults neutros só onde houver prova de não regressão.
 2. Varrer `nitro-v15` em scripts Python/sh/mjs (excluir hosts/flake/docs).
 3. Adicionar check de CI/lint para novos IPs literais fora de allowlist.
+
+
+## Passe nitro-v15 em scripts (28/11, herald-termux-vision)
+- Escopo: `scripts/*.py,sh,mjs,js`, `modules/**/*.py,sh`, `tests/*.py` (excl. archive/hosts/flake/docs).
+- Hits: 12 arquivos.
+- Alterados (cosmético/seguro): `scripts/async-fleet.py`, `scripts/f30-dashboard.py`, `scripts/host-proxy.mjs` (comentário/display genérico).
+- Exceções funcionais (não dinamizar cego): aliases/normalização de identidade em `modules/ai/jarvis/src/jarvis/core/comms.py`, `core/coord.py`, `core/coord_roster.py`, `scripts/agent-roster.py`; testes de contrato/fixtures em `modules/ai/jarvis/tests/*`, `tests/test_agent_model_rotation.py`, `tests/test_agent_msg_channel.py`.

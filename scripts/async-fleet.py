@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""async-fleet — orquestrador nao bloqueante (host nitro-v15).
+"""async-fleet — orquestrador nao bloqueante (host local).
 
 Roda em background, poll curto, e quando um job termina:
   - escreve resultado em ~/work/hybrid/async-events.jsonl (append-only)

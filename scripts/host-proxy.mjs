@@ -3,7 +3,7 @@
 // so aceita localhost/IP e devolve 403 com o nome magico do tailnet).
 //
 // (15/11, crouton-alpha) O Tailscale Serve entrega o Host original
-// (nitro-v15.tailbcc368.ts.net) e o vite preview do JARVIS recusa com 403.
+// (host tailnet) e o vite preview do JARVIS recusa com 403.
 // Aqui o Host e trocado por 127.0.0.1 e o X-Forwarded-Host preserva o
 // original (o backend do webui le o host para montar URLs).
 //
