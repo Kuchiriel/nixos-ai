@@ -43,7 +43,7 @@ def active_sessions():
     h = {"Authorization": "Basic " + base64.b64encode(f"opencode:{pw}".encode()).decode()}
     try:
         d = json.load(urllib.request.urlopen(
-            urllib.request.Request("http://100.121.100.103:4599/api/session", headers=h), timeout=15))
+            urllib.request.Request(os.environ.get("AGENTS_OC_URL","http://127.0.0.1:4599")+"/api/session", headers=h), timeout=15))
         return [(s.get("id"), (s.get("model") or {})) for s in (d.get("data") or [])]
     except Exception:
         return []

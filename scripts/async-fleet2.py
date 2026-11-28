@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """async-fleet v2 — poller nao bloqueante para GPU local + Kaggle."""
 from __future__ import annotations
-import json, subprocess, time
+import json, os, subprocess, time
 from pathlib import Path
 
 HERE = Path('/home/nixos')
 EVENTS = HERE / 'work/hybrid/async-events.jsonl'
-PHONE = 'u0_a438@100.104.175.123'
+PHONE = os.environ.get('TERMUX_PHONE_SSH','u0_a438@100.104.175.123')
 AW = '/data/data/com.termux/files/home/bin/auto-wake'
 PRIN = 'improver-termux-fast@termux:ses_e52816aa7ffe4zi1iV7cJ8mvtc'
 JOBS = [

@@ -8,12 +8,12 @@ Roda em background, poll curto, e quando um job termina:
 Nao toca identidade/plugin/comms (outros agentes estao la).
 """
 from __future__ import annotations
-import json, subprocess, time
+import json, os, subprocess, time
 from pathlib import Path
 
 HERE = Path('/home/nixos')
 EVENTS = HERE / 'work/hybrid/async-events.jsonl'
-PHONE = 'u0_a438@100.104.175.123'
+PHONE = os.environ.get('TERMUX_PHONE_SSH','u0_a438@100.104.175.123')
 PHONE_PORT = 8022
 AW = '/data/data/com.termux/files/home/bin/auto-wake'
 BUS = '/data/data/com.termux/files/home/bin/bus-post'
