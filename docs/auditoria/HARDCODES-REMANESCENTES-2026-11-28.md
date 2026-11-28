@@ -34,3 +34,18 @@ Maioria é host-specific esperado (`hosts/nitro-v15/*`, `flake.nix`, módulos Ni
 - Hits: 12 arquivos.
 - Alterados (cosmético/seguro): `scripts/async-fleet.py`, `scripts/f30-dashboard.py`, `scripts/host-proxy.mjs` (comentário/display genérico).
 - Exceções funcionais (não dinamizar cego): aliases/normalização de identidade em `modules/ai/jarvis/src/jarvis/core/comms.py`, `core/coord.py`, `core/coord_roster.py`, `scripts/agent-roster.py`; testes de contrato/fixtures em `modules/ai/jarvis/tests/*`, `tests/test_agent_model_rotation.py`, `tests/test_agent_msg_channel.py`.
+
+
+## Passe nitro-v15 scripts/módulos (2ª, 28/11, herald-termux-vision)
+Escopo: `scripts/*.py,sh,mjs,js` + `modules/**/*.py` (excl. archive). Hits restantes: **9 em 6 arquivos**.
+
+| Arquivo | Linha(s) | Tipo | Decisão |
+|---|---:|---|---|
+| `modules/ai/jarvis/src/jarvis/core/comms.py` | 353 | comentário | manter (contexto histórico/alias) |
+| `modules/ai/jarvis/src/jarvis/core/coord.py` | 401,616 | comentário + alias identidade | manter (normalização; mudar quebra resolução) |
+| `modules/ai/jarvis/src/jarvis/core/coord_roster.py` | 39 | alias identidade | manter (forbidden fixed session agents) |
+| `scripts/agent-roster.py` | 696,1047 | comentário/exemplo | manter |
+| `modules/ai/jarvis/tests/test_comms.py` | 5,34 | teste contrato/fixture | manter (contrato) |
+| `modules/ai/jarvis/tests/test_comms_night_digest.py` | 100 | teste fixture | manter (contrato) |
+
+Nenhuma ocorrência funcional de hostname de host/config exigindo dinamização segura nesta passada.
