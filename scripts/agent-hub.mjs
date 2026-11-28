@@ -8,7 +8,7 @@
 //   POST /api/wake                  -> {"name":"...","text":"..."} injeta user-turn na sessão
 // Nada de credencial exposta: o token fica só no lado do servidor (loopback).
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, openSync, readSync, closeSync, mkdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
@@ -23,6 +23,7 @@ const UI_FILE = join(__DIR, 'agent-hub-ui.html');
 const OC = 'http://100.121.100.103:4599';
 const ENV = HOME + '/.config/opencode/server.env';
 const ROSTER = HOME + '/projects/.agents/roster.json';
+const TASKS_FILE = HOME + '/.local/state/jarvis/agent-hub-tasks.json';
 const CWD = '/home/nixos';
 
 let pw;
@@ -559,6 +560,34 @@ function evPush(kind, text, meta) {
   return ev;
 }
 
+let TASKS = [];
+function loadTasks() {
+  try { TASKS = JSON.parse(readFileSync(TASKS_FILE, 'utf8')); if (!Array.isArray(TASKS)) TASKS = []; } catch { TASKS = []; }
+}
+function saveTasks() {
+  try { mkdirSync(dirname(TASKS_FILE), { recursive: true }); } catch {}
+  try { writeFileSync(TASKS_FILE, JSON.stringify(TASKS.slice(-500), null, 2)); } catch {}
+}
+loadTasks();
+function taskPush(patch) {
+  const now = Date.now();
+  const t = {
+    id: patch.id || ('task_' + now + '_' + Math.random().toString(36).slice(2,8)),
+    title: String(patch.title || '').slice(0,200),
+    agent: String(patch.agent || '').slice(0,120),
+    status: ['pending','doing','done','blocked'].includes(patch.status) ? patch.status : 'pending',
+    note: String(patch.note || '').slice(0,500),
+    createdAt: patch.createdAt || now,
+    updatedAt: now,
+    by: String(patch.by || 'hub').slice(0,80),
+  };
+  const i = TASKS.findIndex(x => x.id === t.id);
+  if (i >= 0) TASKS[i] = { ...TASKS[i], ...t, createdAt: TASKS[i].createdAt }; else TASKS.unshift(t);
+  saveTasks();
+  evPush('task', `${t.status}: ${t.title}${t.agent ? ' -> '+t.agent : ''}`, { taskId: t.id, agent: t.agent, status: t.status });
+  return TASKS.find(x => x.id === t.id) || t;
+}
+
 // ── leitura de arquivo com offset (tail incremental) ──────────
 function tailFrom(path, state, maxBytes = 64 * 1024) {
   if (!existsSync(path)) return '';
@@ -910,6 +939,27 @@ async function handler(req, res) {
   // (16/11) FLUXO DE EVENTOS: SSE. O painel ve o happening em tempo real
   // (nascimento, persona, fala, tool, swap, reload, falha, sucesso) sem
   // polling de pagina inteira.
+  if (req.method === 'GET' && url.pathname === '/api/tasks') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
+    return send(200, JSON.stringify({ ok:true, tasks: TASKS.slice(0,200) }), 'application/json');
+  }
+  if (req.method === 'POST' && url.pathname === '/api/tasks') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
+    let body = {};
+    try { body = JSON.parse(await readBody(req) || '{}'); } catch {}
+    const t = taskPush({ title: body.title, agent: body.agent, status: body.status || 'pending', note: body.note, by: body.by || 'ui' });
+    return send(200, JSON.stringify({ ok:true, task: t }), 'application/json');
+  }
+  if (req.method === 'PATCH' && url.pathname === '/api/tasks') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
+    let body = {};
+    try { body = JSON.parse(await readBody(req) || '{}'); } catch {}
+    if (!body.id) return send(400, JSON.stringify({ ok:false, error:'id required' }), 'application/json');
+    const prev = TASKS.find(x=>x.id===body.id);
+    if (!prev) return send(404, JSON.stringify({ ok:false, error:'not found' }), 'application/json');
+    const t = taskPush({ ...prev, ...body, id: prev.id });
+    return send(200, JSON.stringify({ ok:true, task: t }), 'application/json');
+  }
   if (req.method === 'GET' && url.pathname === '/api/events/stream') {
     const t = url.searchParams.get('token') || '';
     if (!sameSecret(t, hubToken())) { res.writeHead(401); return res.end('unauthorized'); }

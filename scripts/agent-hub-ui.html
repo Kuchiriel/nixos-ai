@@ -216,9 +216,17 @@ pre.diff{
       <div class="card"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">falhas recentes</h3><div id="missionFails" class="feed" style="max-height:28vh"></div></div>
       <div class="card"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">eventos recentes</h3><div id="missionEv" class="feed" style="max-height:28vh"></div></div>
     </div>
+    <div class="card" style="margin-top:10px"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">tasks / approvals (OpenMausBot-inspired)</h3>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <input id="taskTitle" placeholder="nova tarefa..." style="flex:1;min-width:180px">
+        <select id="taskAgent" style="max-width:220px"></select>
+        <button id="taskAdd" class="primary">criar</button>
+      </div>
+      <div id="taskList" class="tiny"></div>
+    </div>
     <div class="card" style="margin-top:10px"><h3 style="margin:0 0 8px;font-size:12px;color:var(--dim)">playground / lab</h3>
       <div class="tiny dim">Acesso rápido: <a href="/lab" target="_blank">/lab</a> · <a href="/house" target="_blank">/house</a> · <a href="/api/mission" target="_blank">/api/mission</a></div>
-      <div class="tiny dim" style="margin-top:6px">Baseado em papers indexados: AgentGUI (2607.26300), AgentOps (2411.05285), Agent System Operations (2606.01581), Governance-Aware Telemetry (2604.05119) em <code>~/Books/papers/agent-hub-mission-control-2026-11-28/</code>.</div>
+      <div class="tiny dim" style="margin-top:6px">Baseado em papers indexados: AgentGUI (2607.26300), AgentOps (2411.05285), Agent System Operations (2606.01581), Governance-Aware Telemetry (2604.05119) + Lacuna (2603.01092) no RAG do host.</div>
     </div>
   </section>
 
@@ -229,7 +237,10 @@ pre.diff{
     </h2>
     <div class="card" style="margin-bottom:10px">
       <div class="chips" id="chatChips"></div>
-      <div class="tiny dim" style="margin-top:6px">Slack-like: escolha alvo, envie mensagem, acompanhe feed. Use <code>@nome</code> no texto ou selecione o alvo.</div>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+        <select id="chatThread" style="max-width:240px"><option value="">thread: todos</option></select>
+        <span class="tiny dim">Threads por agente: filtre para ver a conversa daquele agente.</span>
+      </div>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <div id="chatFeed" class="feed" style="max-height:52vh;padding:10px"></div>
@@ -657,6 +668,58 @@ async function abControl(action, model, level){
   setTimeout(loadAB, 400);
 }
 
+async function loadTaskAgents(){
+  try{ const d=await (await api('/api/agents')).json(); const agents=(d.agents||[]).filter(a=>!a.unclaimed);
+    const sel=$('#taskAgent'); if(!sel) return; const cur=sel.value;
+    sel.innerHTML='<option value="">agente (opcional)...</option>'+agents.map(a=>`<option value="${esc(a.codename||a.name)}">${esc(a.codename||a.name)}</option>`).join('');
+    if(cur) sel.value=cur;
+  }catch(e){}
+}
+async function loadTasksUI(){
+  try{
+    const d=await (await api('/api/tasks')).json();
+    const tasks=d.tasks||[];
+    const el=$('#taskList'); if(!el) return;
+    el.innerHTML = tasks.length ? tasks.map(t=>`
+      <div class="task">
+        <div class="head"><span class="pill st-${esc(t.status)}">${esc(t.status)}</span><span class="title">${esc(t.title)}</span>${t.agent?`<span class="tag">${esc(t.agent)}</span>`:''}<span class="tiny dim" style="margin-left:auto">${hhmm(t.updatedAt)}</span></div>
+        ${t.note?`<div class="tiny dim" style="margin-top:4px">${esc(t.note)}</div>`:''}
+        <div class="acts">
+          <button data-tact="doing" data-id="${esc(t.id)}">doing</button>
+          <button data-tact="done" data-id="${esc(t.id)}">done</button>
+          <button data-tact="blocked" data-id="${esc(t.id)}">blocked</button>
+          <button data-tact="steer" data-id="${esc(t.id)}" data-agent="${esc(t.agent||'')}">steer</button>
+          <button data-tact="status" data-id="${esc(t.id)}" data-agent="${esc(t.agent||'')}">status</button>
+        </div>
+      </div>`).join('') : '<span class="dim">sem tasks</span>';
+    $$('#taskList [data-tact]').forEach(b=>b.onclick=()=>taskAction(b.dataset.tact,b.dataset.id,b.dataset.agent||''));
+  }catch(e){ showErr('loadTasksUI', e); }
+}
+async function addTask(){
+  const title=$('#taskTitle').value.trim(); const agent=$('#taskAgent').value.trim();
+  if(!title){ toast('título vazio'); return; }
+  const r=await api('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,agent,status:'pending',by:'ui'})});
+  const j=await r.json().catch(()=>({}));
+  if(r.ok && j.ok){ $('#taskTitle').value=''; toast('task criada'); loadTasksUI(); }
+  else toast('falha: '+(j.error||r.status));
+}
+async function taskAction(act,id,agent){
+  if(act==='steer' || act==='status'){
+    if(!agent){ toast('task sem agente'); return; }
+    const text = act==='status' ? 'status rápido: qual estado, próximo passo e bloqueio?' : prompt('Mensagem de steer para '+agent+':','Aprovar/seguir com o próximo passo e reportar evidência.');
+    if(!text) return;
+    const r=await api('/api/wake',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:agent,text})});
+    const j=await r.json().catch(()=>({}));
+    toast(r.ok && j.ok!==false ? 'enviado' : 'falha');
+    await api('/api/tasks',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status:'doing',note:(act+': '+text).slice(0,400)})});
+    loadTasksUI(); return;
+  }
+  const r=await api('/api/tasks',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status:act,by:'ui'})});
+  const j=await r.json().catch(()=>({}));
+  toast(r.ok && j.ok ? 'ok' : 'falha');
+  loadTasksUI();
+}
+
 /* ── mission ────────────────────────────────────────── */
 async function loadMission(){
   try{
@@ -679,6 +742,7 @@ async function loadMission(){
     $('#missionFails').innerHTML = fails.length ? fails.map(e=>`<div class="ev k-fail"><span class="t">${hhmm(e.ts)}</span><span class="k">${esc(e.kind||'fail')}</span><span class="m">${esc(e.text||'')}</span></div>`).join('') : '<span class="dim">sem falhas recentes</span>';
     const evs = d.recentEvents||[];
     $('#missionEv').innerHTML = evs.length ? evs.map(e=>`<div class="ev k-${esc(e.kind||'ok')}"><span class="t">${hhmm(e.ts)}</span><span class="k">${esc(e.kind||'')}</span><span class="m">${esc((e.text||'').slice(0,160))}</span></div>`).join('') : '<span class="dim">sem eventos</span>';
+    await loadTaskAgents(); await loadTasksUI();
   }catch(e){ showErr('loadMission', e); }
 }
 
@@ -703,12 +767,16 @@ async function loadChatTargets(){
     const cur = sel.value;
     sel.innerHTML = '<option value="">selecionar alvo...</option>' + agents.map(a=>`<option value="${esc(a.codename||a.name)}">${esc(a.codename||a.name)} · ${esc((a.model||'').split('/').pop()||'-')}</option>`).join('');
     if(cur) sel.value = cur;
+    const th = $('#chatThread'); if(th){ const curT=th.value; th.innerHTML='<option value="">thread: todos</option>'+agents.map(a=>`<option value="${esc(a.codename||a.name)}">thread: ${esc(a.codename||a.name)}</option>`).join(''); if(curT) th.value=curT; th.onchange=renderChat; }
   }catch(e){}
 }
 function renderChat(){
   const f = $('#chatFeed'); if(!f) return;
-  const items = CHAT_CACHE.slice(0,120);
-  $('#chatStat').textContent = items.length + ' msgs';
+  const thread = ($('#chatThread')?.value||'').toLowerCase();
+  let items = CHAT_CACHE.slice(0,200);
+  if(thread) items = items.filter(m => ((m.from||'').toLowerCase().includes(thread) || (m.to||'').toLowerCase().includes(thread) || (m.text||'').toLowerCase().includes('@'+thread)));
+  items = items.slice(0,120);
+  $('#chatStat').textContent = items.length + ' msgs' + (thread ? ' · thread '+thread : '');
   f.innerHTML = items.map(m=>{
     const mine = (m.from||'').toLowerCase() === 'voce' || (m.from||'').toLowerCase() === 'você';
     return `<div class="chat-msg ${mine?'me':''}"><div class="head"><span class="t">${hhmm(m.ts)}</span><span class="who">${esc(m.from||'?')}</span>${m.to?`<span class="dim">→ ${esc(m.to)}</span>`:''}<span class="tag">${esc(m.kind||'msg')}</span></div><div class="body">${esc(m.text||'')}</div></div>`;
