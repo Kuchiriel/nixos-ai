@@ -15,6 +15,7 @@ Objetivo: distinguir hardcodes **intencionais/canônicos** de hardcodes **aciden
 | `home-manager/modules/agent-hub.nix` | forward tailnet intencional | manter |
 | `tests/test_agent_msg_channel.py` | teste de contrato da config | manter alinhado ao contrato |
 | `modules/ai/jarvis/src/jarvis/core/{comms,coord,coord_roster}.py`, `scripts/agent-roster.py` | aliases/normalização de identidade (nitro-v15 etc) | manter; não dinamizar como hostname |
+| `scripts/async-fleet3.py` | poller com endpoint PHONE tailnet literal (PC->celular, assimetria conhecida); allowlisted no check-hardcodes.sh | manter documentado; env-first em refactor futuro |
 
 ## Fora da allowlist (corrigir ou justificar)
 - Literais de IP/hostname em scripts py/sh/mjs/js novos devem usar env/config/hostname.
