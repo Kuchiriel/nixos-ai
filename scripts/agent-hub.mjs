@@ -22,7 +22,7 @@ const HOME = process.env.HOME;
 // disco a cada request (barato) e o HTML inline segue como fallback.
 const __DIR = dirname(fileURLToPath(import.meta.url));
 const UI_FILE = join(__DIR, 'agent-hub-ui.html');
-const OC = 'http://100.121.100.103:4599';
+const OC = process.env.AGENTS_OC_URL || 'http://127.0.0.1:4599';
 const ENV = HOME + '/.config/opencode/server.env';
 const ROSTER = HOME + '/projects/.agents/roster.json';
 const TASKS_FILE = HOME + '/.local/state/jarvis/agent-hub-tasks.json';

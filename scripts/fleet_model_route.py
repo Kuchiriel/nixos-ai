@@ -16,7 +16,7 @@ Usage: --dry-run (default) | --apply | --agent NAME | --test
 """
 import argparse
 import base64
-import json
+import json, os
 import pathlib
 import subprocess
 import time
@@ -29,7 +29,7 @@ ROSTER = HOME / "projects/.agents/roster.json"
 ENV = HOME / ".config/opencode/server.env"
 LOG = HOME / ".local/state/fleet-model-route.jsonl"
 HEALTH = HOME / "projects/ai-mesh/docs/provider-health-2026-11-19.json"
-OC = "http://100.121.100.103:4599"
+OC = os.environ.get("AGENTS_OC_URL","http://127.0.0.1:4599")
 
 
 def registry() -> dict:

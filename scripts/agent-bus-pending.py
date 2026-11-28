@@ -59,7 +59,7 @@ def _default_url() -> str:
         pass
     # (25/11, medido) o ultimo fallback era o loopback, que NAO responde
     # (a unit escuta so no IP do tailnet). Agora e o endereco que responde.
-    return _CONFIG_URL or "http://100.121.100.103:8765/mcp"
+    return _CONFIG_URL or os.environ.get("COORD_MCP_URL","http://127.0.0.1:8765/mcp")
 
 
 DEFAULT_URL = _default_url()

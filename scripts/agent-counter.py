@@ -209,7 +209,7 @@ def enviar_prompt(session: str, texto: str, timeout: float = 180.0) -> tuple[int
     """
     import base64
     import urllib.request
-    url = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599").rstrip("/")
+    url = os.environ.get("AGENTS_OC_URL", "http://127.0.0.1:4599").rstrip("/")
     pw = ""
     try:
         for line in (Path.home() / ".config/opencode/server.env").read_text().splitlines():

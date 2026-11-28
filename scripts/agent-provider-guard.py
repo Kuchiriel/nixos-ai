@@ -220,7 +220,7 @@ def provider_for_model(model_id: str,
 # opencode: GET /api/session/<id> devolve o model da sessao. Medido: 13ms
 # por chamada. A mesma API e a mesma credencial que o agent-model.py usa
 # (mesmo arquivo server.env, mesmo host), entao nao ha fonte nova.
-SERVE = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
+SERVE = os.environ.get("AGENTS_OC_URL", "http://127.0.0.1:4599")
 SERVER_ENV = HOME / ".config/opencode/server.env"
 _SESSION_CACHE: dict[str, tuple[str, str]] = {}
 

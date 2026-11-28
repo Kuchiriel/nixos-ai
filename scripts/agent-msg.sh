@@ -101,7 +101,7 @@ try:
 except Exception:
     print(os.environ.get('AGENTS_OC_URL','http://127.0.0.1:4599'), file=sys.stderr)
     sys.exit(1)
-" 2>/dev/null || echo "http://100.121.100.103:4599")}"
+" 2>/dev/null || echo "${AGENTS_OC_URL:-http://127.0.0.1:4599}")}"
 OC_ENVFILE="${AGENTS_OC_ENVFILE:-$HOME/.config/opencode/server.env}"
 OC_USER="${OPENCODE_SERVER_USERNAME:-opencode}"
 OC_PASS="${OPENCODE_SERVER_PASSWORD:-}"

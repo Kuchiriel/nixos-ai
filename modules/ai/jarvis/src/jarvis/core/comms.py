@@ -63,7 +63,7 @@ ROSTER_PY = _find_roster()
 SERVER_ENV = Path(
     os.environ.get("AGENTS_OC_ENVFILE", "~/.config/opencode/server.env")
 ).expanduser()
-DEFAULT_BASE = "http://100.121.100.103:4599"
+DEFAULT_BASE = os.environ.get("AGENTS_OC_URL","http://127.0.0.1:4599")
 
 
 def oc_base() -> str:
@@ -259,7 +259,7 @@ def agents_pulse() -> str:
         import urllib.request
         from pathlib import Path
 
-        base = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
+        base = os.environ.get("AGENTS_OC_URL", DEFAULT_BASE)
         pw = os.environ.get("OPENCODE_SERVER_PASSWORD", "")
         if not pw:
             env = Path.home() / ".config/opencode/server.env"

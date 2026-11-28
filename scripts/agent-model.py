@@ -36,7 +36,7 @@ from pathlib import Path
 HOME = Path.home()
 STATE = Path(os.environ.get("JARVIS_STATE_DIR", str(HOME / ".local/state/jarvis")))
 COOLDOWN = STATE / "provider-cooldown.json"
-SERVE = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
+SERVE = os.environ.get("AGENTS_OC_URL", "http://127.0.0.1:4599")
 ENVFILE = HOME / ".config/opencode/server.env"
 # (27/11, medido) O timeout POR TENTATIVA tem de caber no orcamento do
 # CHAMADOR. O provider-guard roda este script com
