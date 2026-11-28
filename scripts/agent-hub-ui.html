@@ -689,18 +689,9 @@ async function loadTasksUI(){
     const d=await (await api('/api/tasks')).json();
     const tasks=d.tasks||[];
     const el=$('#taskList'); if(!el) return;
-    el.innerHTML = tasks.length ? tasks.map(t=>`
-      <div class="task">
-        <div class="head"><span class="pill st-${esc(t.status)}">${esc(t.status)}</span><span class="title">${esc(t.title)}</span>${t.agent?`<span class="tag">${esc(t.agent)}</span>`:''}<span class="tiny dim" style="margin-left:auto">${hhmm(t.updatedAt)}</span></div>
-        ${t.note?`<div class="tiny dim" style="margin-top:4px">${esc(t.note)}</div>`:''}
-        <div class="acts">
-          <button data-tact="doing" data-id="${esc(t.id)}">doing</button>
-          <button data-tact="done" data-id="${esc(t.id)}">done</button>
-          <button data-tact="blocked" data-id="${esc(t.id)}">blocked</button>
-          <button data-tact="steer" data-id="${esc(t.id)}" data-agent="${esc(t.agent||'')}">steer</button>
-          <button data-tact="status" data-id="${esc(t.id)}" data-agent="${esc(t.agent||'')}">status</button>
-        </div>
-      </div>`).join('') : '<span class="dim">sem tasks</span>';
+    const cols=['pending','doing','blocked','done'];
+    const renderTask=t=>`<div class="task"><div class="head"><span class="title">${esc(t.title)}</span></div>${t.agent?`<div class="tiny dim">${esc(t.agent)}</div>`:''}${t.note?`<div class="tiny dim" style="margin-top:4px">${esc(t.note.slice(0,90))}</div>`:''}<div class="tiny dim">${hhmm(t.updatedAt)}</div><div class="acts"><button data-tact="doing" data-id="${esc(t.id)}">doing</button><button data-tact="done" data-id="${esc(t.id)}">done</button><button data-tact="blocked" data-id="${esc(t.id)}">blocked</button><button data-tact="steer" data-id="${esc(t.id)}" data-agent="${esc(t.agent||'')}">steer</button></div></div>`;
+    el.innerHTML = `<div class="kanban">${cols.map(c=>{const items=tasks.filter(t=>t.status===c); return `<div class="kcol"><h4><span>${c}</span><span>${items.length}</span></h4>${items.map(renderTask).join('')||'<div class="tiny dim">—</div>'}</div>`;}).join('')}</div>`;
     $$('#taskList [data-tact]').forEach(b=>b.onclick=()=>taskAction(b.dataset.tact,b.dataset.id,b.dataset.agent||''));
   }catch(e){ showErr('loadTasksUI', e); }
 }
