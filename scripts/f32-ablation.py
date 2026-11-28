@@ -55,7 +55,7 @@ def main():
                     help="arquivo ScaleLM alternativo (F129: scale-loop-blocksfix.py)")
     a = ap.parse_args()
     if a.model_src:
-        SRC = Path(a.model_src)
+        globals()['SRC'] = Path(a.model_src)
         print(json.dumps({"model_src": str(SRC)}), flush=True)
     import runpy
     ScaleLM = runpy.run_path(str(SRC))["ScaleLM"]
