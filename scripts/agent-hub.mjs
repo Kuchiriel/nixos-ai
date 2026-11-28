@@ -1544,16 +1544,20 @@ async function handler(req, res) {
       if (raw.length > BODY_MAX) return send(413, JSON.stringify({ error: 'body grande demais' }), 'application/json');
     }
     try {
-      const { name, text } = JSON.parse(raw || '{}');
+      const { name, text, rag_sources } = JSON.parse(raw || '{}');
       const out = await wake(name, text);
       // (20/11) caminho `hub-wake`: entrega direta na sessao tambem e
       // conversa da frota e deve aparecer no Bus com origem etiquetada.
       try {
         const line = JSON.stringify({ ts: new Date().toISOString(), name,
           to: (out.body && out.body.name) || name,
-          text: String(text || '').replace(/\s+/g, ' ').slice(0, 500) }) + '\n';
+          text: String(text || '').replace(/\s+/g, ' ').slice(0, 500),
+          rag_sources: Array.isArray(rag_sources) ? rag_sources.slice(0,8) : undefined }) + '\n';
         writeFileSync(HOME + '/.local/state/jarvis/hub-messages.jsonl', line, { flag: 'a' });
       } catch { /* log e best-effort; a entrega ja aconteceu */ }
+      if (Array.isArray(rag_sources) && rag_sources.length) {
+        evPush('rag', `wake ${name}: ${rag_sources.length} fonte(s) RAG anexadas`, { name, rag_sources: rag_sources.slice(0,8) });
+      }
       return send(out.status, JSON.stringify(out.body), 'application/json');
     } catch (e) { return send(400, JSON.stringify({ error: String(e) }), 'application/json'); }
   }

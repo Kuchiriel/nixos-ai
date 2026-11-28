@@ -830,7 +830,7 @@ async function sendChat(){
   if(!text){ toast('escreva uma mensagem'); return; }
   $('#chatSend').disabled = true;
   try{
-    const r = await api('/api/wake', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, text})});
+    const r = await api('/api/wake', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, text, rag_sources: RAG_LAST.map(h=>({title:h.title,path:h.path}))})});
     const j = await r.json().catch(()=>({}));
     if(!r.ok || j.ok===false){ toast('falha: '+(j.error||r.status)); }
     else {
