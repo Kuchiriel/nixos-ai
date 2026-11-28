@@ -1244,14 +1244,23 @@ async function handler(req, res) {
     const stale = agents.filter(a=>a.updated && (now-a.updated)>30*60*1000 && !a.unclaimed).slice(0,10).map(a=>({name:a.codename||a.name, session:a.session, age_s:Math.round((now-a.updated)/1000), status:a.status, model:a.model}));
     const tasks = Array.isArray(TASKS) ? TASKS : [];
     const openTasks = tasks.filter(t=>['pending','doing','blocked'].includes(t.status)).slice(0,8);
-    const chief = {
-      blockers: failures.slice(0,5).map(f=>f.text),
-      stale: stale.slice(0,5).map(x=>`${x.name} (${Math.round((x.age_s||0)/60)}m, ${x.status})`),
-      next_actions: [
+    const next_actions = [
         ...openTasks.slice(0,4).map(t=>`${t.status}: ${t.title}${t.agent?' -> '+t.agent:''}`),
         ...(stale.length ? [`revisar stale: ${stale[0].name}`] : []),
         ...(failures.length ? [`investigar falha: ${(failures[0].text||'').slice(0,80)}`] : []),
-      ].slice(0,6),
+      ].slice(0,6);
+    const suggested_action = failures.length
+      ? `investigar falha: ${(failures[0].text||'').slice(0,100)}`
+      : stale.length
+      ? `acordar/revisar stale: ${stale[0].name}`
+      : openTasks.length
+      ? `avançar task: ${openTasks[0].title}${openTasks[0].agent?' -> '+openTasks[0].agent:''}`
+      : 'monitorar frota e enfileirar próxima frente útil';
+    const chief = {
+      blockers: failures.slice(0,5).map(f=>f.text),
+      stale: stale.slice(0,5).map(x=>`${x.name} (${Math.round((x.age_s||0)/60)}m, ${x.status})`),
+      next_actions,
+      suggested_action,
       open_tasks: openTasks.length,
     };
     const summary = {

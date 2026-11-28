@@ -543,9 +543,12 @@ function renderFeed(){
       (!evSearch || (e.text||'').toLowerCase().includes(evSearch)));
   $('#pulseStat').textContent = `${list.length} eventos` + (evPaused?' (pausado)':'');
   if(!list.length){ f.innerHTML='<div class="tiny dim" style="padding:10px">sem eventos ainda</div>'; return; }
-  f.innerHTML = list.slice(0,300).map(e=>
-    `<div class="ev k-${esc(e.kind)}"><span class="t">${hhmm(e.ts)}</span><span class="k">${esc(e.kind)}</span><span class="m">${esc(e.text||'')}</span></div>`
-  ).join('');
+  f.innerHTML = list.slice(0,300).map(e=>{
+    const rs=(e.meta&&e.meta.rag_sources)||e.rag_sources||[];
+    const ragBadge = rs.length ? `<span class="tag ok" style="margin-left:6px">RAG ${rs.length}</span>` : (e.kind==='rag'?'<span class="tag ok" style="margin-left:6px">RAG</span>':'');
+    const src = rs.length ? `<div class="tiny dim" style="margin-top:2px">${rs.slice(0,2).map(r=>esc((r.title||r.path||'').slice(0,60))).join(' · ')}</div>` : '';
+    return `<div class="ev k-${esc(e.kind)}"><span class="t">${hhmm(e.ts)}</span><span class="k">${esc(e.kind)}</span><span class="m">${esc(e.text||'')}${ragBadge}${src}</span></div>`;
+  }).join('');
 }
 function connectStream(){
   try{
@@ -690,7 +693,7 @@ async function loadTasksUI(){
     const tasks=d.tasks||[];
     const el=$('#taskList'); if(!el) return;
     const cols=['pending','doing','blocked','done'];
-    const renderTask=t=>`<div class="task"><div class="head"><span class="title">${esc(t.title)}</span></div>${t.agent?`<div class="tiny dim">${esc(t.agent)}</div>`:''}${t.note?`<div class="tiny dim" style="margin-top:4px">${esc(t.note.slice(0,90))}</div>`:''}<div class="tiny dim">${hhmm(t.updatedAt)}</div><div class="acts"><button data-tact="doing" data-id="${esc(t.id)}">doing</button><button data-tact="done" data-id="${esc(t.id)}">done</button><button data-tact="blocked" data-id="${esc(t.id)}">blocked</button><button data-tact="steer" data-id="${esc(t.id)}" data-agent="${esc(t.agent||'')}">steer</button></div></div>`;
+    const renderTask=t=>`<div class="task"><div class="head"><span class="title">${esc(t.title)}</span></div>${t.agent?`<div class="tiny dim">${esc(t.agent)}</div>`:''}${t.note?`<div class="tiny dim" style="margin-top:4px">${esc(t.note.slice(0,90))}</div>`:''}<div class="tiny dim">${hhmm(t.updatedAt)}</div><div class="acts"><button data-tact="doing" data-id="${esc(t.id)}">doing</button><button data-tact="done" data-id="${esc(t.id)}">done</button><button data-tact="blocked" data-id="${esc(t.id)}">blocked</button><button data-tact="steer" data-id="${esc(t.id)}" data-agent="${esc(t.agent||'')}">steer</button><button data-tact="thread" data-id="${esc(t.id)}" data-agent="${esc(t.agent||'')}">thread</button></div></div>`;
     el.innerHTML = `<div class="kanban">${cols.map(c=>{const items=tasks.filter(t=>t.status===c); return `<div class="kcol"><h4><span>${c}</span><span>${items.length}</span></h4>${items.map(renderTask).join('')||'<div class="tiny dim">—</div>'}</div>`;}).join('')}</div>`;
     $$('#taskList [data-tact]').forEach(b=>b.onclick=()=>taskAction(b.dataset.tact,b.dataset.id,b.dataset.agent||''));
   }catch(e){ showErr('loadTasksUI', e); }
@@ -704,6 +707,17 @@ async function addTask(){
   else toast('falha: '+(j.error||r.status));
 }
 async function taskAction(act,id,agent){
+  if(act==='thread'){
+    if(!agent){ toast('task sem agente'); return; }
+    setTab('chat');
+    await loadChat();
+    const th=$('#chatThread'); const tg=$('#chatTarget');
+    if(th) th.value=agent;
+    if(tg) tg.value=agent;
+    renderChat();
+    toast('thread: '+agent);
+    return;
+  }
   if(act==='steer' || act==='status'){
     if(!agent){ toast('task sem agente'); return; }
     const text = act==='status' ? 'status rápido: qual estado, próximo passo e bloqueio?' : prompt('Mensagem de steer para '+agent+':','Aprovar/seguir com o próximo passo e reportar evidência.');
@@ -744,7 +758,7 @@ async function loadMission(){
     $('#missionEv').innerHTML = evs.length ? evs.map(e=>`<div class="ev k-${esc(e.kind||'ok')}"><span class="t">${hhmm(e.ts)}</span><span class="k">${esc(e.kind||'')}</span><span class="m">${esc((e.text||'').slice(0,160))}</span></div>`).join('') : '<span class="dim">sem eventos</span>';
     const chief = d.chief || {};
     const mk = (arr)=> (arr&&arr.length)?'<ul style="margin:4px 0 0 18px;padding:0">'+arr.map(x=>'<li>'+esc(String(x)).slice(0,140)+'</li>').join('')+'</ul>':'<div class="dim">nada</div>';
-    $('#missionChief').innerHTML = `<div class="grid two"><div><b class="warnc">Bloqueios/falhas</b>${mk(chief.blockers)}</div><div><b class="warnc">Stale</b>${mk(chief.stale)}</div></div><div style="margin-top:8px"><b class="okc">Próximas ações</b>${mk(chief.next_actions)}</div><div class="tiny dim" style="margin-top:6px">open_tasks=${chief.open_tasks||0}</div>`;
+    $('#missionChief').innerHTML = `<div class="grid two"><div><b class="warnc">Bloqueios/falhas</b>${mk(chief.blockers)}</div><div><b class="warnc">Stale</b>${mk(chief.stale)}</div></div><div style="margin-top:8px"><b class="okc">Próximas ações</b>${mk(chief.next_actions)}</div><div style="margin-top:8px"><b class="okc">Ação sugerida</b><div class="tiny" style="margin-top:4px">${esc(chief.suggested_action||'monitorar')}</div></div><div class="tiny dim" style="margin-top:6px">open_tasks=${chief.open_tasks||0}</div>`;
     await loadTaskAgents(); await loadTasksUI();
   }catch(e){ showErr('loadMission', e); }
 }
