@@ -8,12 +8,12 @@ Correcao v3 (28/11 11:2xZ):
   - `kernels output` puxa o JSON de resultado (o `pull` so traz o codigo).
 """
 from __future__ import annotations
-import json, subprocess, time
+import json, os, subprocess, time
 from pathlib import Path
 
 HERE = Path('/home/nixos')
 EVENTS = HERE / 'work/hybrid/async-events.jsonl'
-PHONE = 'u0_a438@100.104.175.123'  # PC->celular no tailnet funciona (assimetria: celular->PC caiu)
+PHONE = os.environ.get('TERMUX_PHONE_SSH','u0_a438@100.104.175.123')  # fallback local; env tem precedência
 AW = '/data/data/com.termux/files/home/bin/auto-wake'
 BUS = '/data/data/com.termux/files/home/bin/bus-post'
 DIRECT = '/data/data/com.termux/files/home/bin/direct-msg'
