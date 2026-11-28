@@ -19,7 +19,15 @@ input{background:#0d1117;color:#e6edf3;border:1px solid #30363d;padding:7px;bord
   <strong id="machStage"></strong>
  </div>
  <div id="machSvg"></div>
+ <div style="display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap">
+  <span style="color:#8b949e;font-size:12px">Nível de explicação:</span>
+  <button onclick="machSetLevel(1)" style="background:#238636;color:#fff;border:0;border-radius:5px;padding:4px 9px">1 · visão geral</button>
+  <button onclick="machSetLevel(2)" style="background:#1f6feb;color:#fff;border:0;border-radius:5px;padding:4px 9px">2 · dentro do bloco</button>
+  <button onclick="machSetLevel(3)" style="background:#8957e5;color:#fff;border:0;border-radius:5px;padding:4px 9px">3 · fórmula/código</button>
+  <span id="machLevel" style="color:#8b949e;font-size:12px">atual: 1</span>
+ </div>
  <div id="machDetail" style="margin-top:12px;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px;min-height:86px;font-size:13px;line-height:1.55"></div>
+ <p style="color:#8b949e;font-size:11px;margin-bottom:0">Fonte única: <code>MACH_PARTS</code>/<code>MACH_STAGES</code>. Níveis progressivos segundo <b>Transformer Explainer</b> (CHI 2026): visão geral do fluxo, depois detalhe matemático sob demanda, com números reais dos checkpoints.</p>
  <p style="color:#8b949e;font-size:12px;margin-bottom:0">Azul = entrada · roxo = laço recorrente (mesma peça reutilizada) · verde = saída · âmbar = cabeça/logits · cinza = memória · laranja = residual/loop. Geometria esquemática; números não medidos aparecem como <b>não medido</b>, nunca estimados.</p>
 </section>
 <script>
@@ -163,16 +171,29 @@ function drawMachine(i){
  });
  machDetail('loop',s);
 }
-function machDetail(id,s){
+let machNivel=1, machLastId='loop';
+function machSetLevel(n){
+ machNivel=n;
+ const el=document.getElementById('machLevel'); if(el) el.textContent='atual: '+n;
+ machDetail(machLastId, MACH_STAGES[MACH_STAGES.length-1]);
+}
+function machDetail(id,s,level){
+ if(level===undefined) level=machNivel;
+ machLastId=id;
  const p=MACH_PARTS[id]; if(!p) return;
  const badge=(txt)=>{const c=txt==='REAL'?'#238636':txt==='DERIVADO'?'#d29922':'#8957e5';return `<span style="background:${c};color:#fff;border-radius:4px;padding:1px 5px;font-size:10px;margin-left:4px">${txt}</span>`};
  let h=`<b style="font-size:15px">${p.t}</b><br><b>Método:</b> ${p.m}<br>`;
- h+=`<b>Fórmula:</b> <code style="color:#79c0ff">${p.f}</code>　<b>Código:</b> <code style="color:#79c0ff">${p.code}</code><br>`;
- h+=`<b>Entra:</b> ${p.i}　<b>Sai:</b> ${p.o}　<b>Fica em:</b> ${p.store}　<b>Loop:</b> ${p.loop}<br>`;
- h+=`<b>Números:</b> `+p.nums.map(n=>`${n[0]}=${n[1]}${badge(n[2])}`).join(' · ');
- h+=`<br><b>Mecanismo deste marco:</b> ${MACH_MECH[s.id]||'—'}`;
- h+=`<br><b>Gate:</b> ${p.gate}`;
- if(MACH_AUDIT[id]) h+=`<br><b style=\"color:#f0883e\">Auditoria 28/11:</b> ${MACH_AUDIT[id]}`;
+ if(level>=2){
+  h+=`<b>Entra:</b> ${p.i}　<b>Sai:</b> ${p.o}　<b>Fica em:</b> ${p.store}　<b>Loop:</b> ${p.loop}<br>`;
+  h+=`<b>Números:</b> `+p.nums.map(n=>`${n[0]}=${n[1]}${badge(n[2])}`).join(' · ');
+  h+=`<br><b>Mecanismo deste marco:</b> ${MACH_MECH[s.id]||'—'}`;
+ }
+ if(level>=3){
+  h+=`<br><b>Fórmula:</b> <code style="color:#79c0ff">${p.f}</code>　<b>Código:</b> <code style="color:#79c0ff">${p.code}</code>`;
+  h+=`<br><b>Gate:</b> ${p.gate}`;
+  if(MACH_AUDIT[id]) h+=`<br><b style="color:#f0883e">Auditoria 28/11:</b> ${MACH_AUDIT[id]}`;
+ }
+ h+=`<br><span style="color:#8b949e;font-size:11px">clique noutra peça; níveis 2/3 revelam detalhe sob demanda</span>`;
  h+=`<br><span style="color:#8b949e">Marco atual: ${s.label} · val=${s.val===null?'não medido':s.val} · acc=${s.acc===null?'não medido':s.acc} · ${s.steps.toLocaleString()} passos</span>`;
  document.getElementById('machDetail').innerHTML=h;
 }
@@ -249,7 +270,7 @@ function table(){
 }
 plot('val'); table();
 </script>
-<section style="margin:22px 0;padding:16px;border:1px solid #30363d;border-radius:8px;background:#0d1117">
+<details style="margin:22px 0"><summary style="cursor:pointer;color:#8b949e">Ver visão antiga: Arquitetura — timelapse 2D (consolidada na máquina acima)</summary><section style="margin:22px 0;padding:16px;border:1px solid #30363d;border-radius:8px;background:#0d1117">
  <h2 style="margin-top:0">Arquitetura — timelapse 2D (dados medidos dos checkpoints)</h2>
  <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
   <button id="archPlay" style="background:#238636;color:#fff;border:0;border-radius:6px;padding:6px 12px">▶ evoluir</button>
@@ -259,7 +280,7 @@ plot('val'); table();
  <div id="archSvg"></div>
  <div id="archInfo" style="margin-top:10px;color:#e6edf3;font-size:14px"></div>
  <p style="color:#8b949e;font-size:12px;margin-bottom:0">Blocos: 2 de entrada + 4 recorrentes (loop elástico) + 2 de saída — medidos em <code>state_dict</code> (102 tensores). Largura ∝ d_model. Valores de val_loss vêm dos JSONs das frentes; nenhum número é estimado.</p>
-</section>
+</section></details>
 <script>
 const ARCH=[{"label": "F53 · SimpleStories", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.7334, "acc": 0.5576, "steps": 9600, "corpus": "SimpleStories 47M", "note": null}, {"label": "F66 · curto", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.1716, "acc": 0.4988, "steps": 9600, "corpus": "TinyStories 200-700", "note": null}, {"label": "F71 · dedup8", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.7304, "acc": 0.4267, "steps": 9600, "corpus": "TinyStories dedup8", "note": null}, {"label": "F10 · 10M", "d": 320, "vocab": 10000, "params": 16.4, "val": 2.9782, "acc": 0.3977, "steps": 2400, "corpus": "TinyStories-valid", "note": null}, {"label": "F35 · 50M", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.3091, "acc": 0.4872, "steps": 9600, "corpus": "TinyStories-valid", "note": null}, {"label": "F38 · 50M early", "d": 704, "vocab": 10000, "params": 62.1, "val": null, "acc": null, "steps": 20000, "corpus": "TinyStories-valid", "note": null}, {"label": "F41 · 50M big", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.2267, "acc": 0.4976, "steps": 9600, "corpus": "TinyStories-valid", "note": null}, {"label": "F42 · 50M full", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.1358, "acc": 0.507, "steps": 9600, "corpus": "TinyStories-full", "note": null}, {"label": "F79 · 20k curado", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.4789, "acc": 0.605, "steps": 20000, "corpus": "SimpleStories 210M", "note": "H3: 20k passos no corpus curado"}, {"label": "F37 · 150M lr", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.3199, "acc": 0.4856, "steps": 9600, "corpus": "TinyStories-valid", "note": null}, {"label": "F43 · 150M full", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.9762, "acc": 0.5314, "steps": 9600, "corpus": "TinyStories-full", "note": null}, {"label": "F44 · 300M full", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.2159, "acc": 0.4951, "steps": 9600, "corpus": "TinyStories-full", "note": null}, {"label": "F45 · 300M QAT", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.1405, "acc": 0.5254, "steps": 19200, "corpus": "TinyStories-full", "note": null}, {"label": "F47 · 150M early", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.7037, "acc": 0.5745, "steps": 24000, "corpus": "TinyStories-full", "note": null}, {"label": "F75 · curado 210M", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.6749, "acc": 0.5722, "steps": 9600, "corpus": "SimpleStories 210M", "note": null}, {"label": "F36 · 50M/30k", "d": 704, "vocab": 10000, "params": 62.1, "val": 2.8175, "acc": 0.4713, "steps": 30000, "corpus": "TinyStories-valid", "note": null}, {"label": "F39 · 150M lr1e-4", "d": 1216, "vocab": 10000, "params": 167.0, "val": 2.2846, "acc": 0.4889, "steps": 9600, "corpus": "TinyStories-valid", "note": null}, {"label": "F46 · 300M QAT/40k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.8831, "acc": 0.5611, "steps": 40000, "corpus": "TinyStories-full", "note": null}, {"label": "F49 · 150M/40k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.5913, "acc": 0.5944, "steps": 40000, "corpus": "TinyStories-full", "note": null}, {"label": "F50 · 150M/60k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.5109, "acc": 0.6089, "steps": 60000, "corpus": "TinyStories-full", "note": null}, {"label": "F52 · 150M/68k", "d": 1216, "vocab": 10000, "params": 167.0, "val": 1.4859, "acc": 0.6128, "steps": 68000, "corpus": "TinyStories-full", "note": null}];
 let archTimer=null;
@@ -368,7 +389,7 @@ function historyTable(){
 }
 historyTable();
 </script>
-<section style="margin:22px 0;padding:16px;border:1px solid #30363d;border-radius:8px;background:#0d1117">
+<details style="margin:22px 0"><summary style="cursor:pointer;color:#8b949e">Ver visão antiga: Fluxo interno — do token ao logit (consolidada na máquina acima)</summary><section style="margin:22px 0;padding:16px;border:1px solid #30363d;border-radius:8px;background:#0d1117">
  <h2 style="margin-top:0">Fluxo interno — do token ao logit (clique nos blocos)</h2>
  <div style="margin-bottom:10px">
   <select id="flowModel">
@@ -380,7 +401,7 @@ historyTable();
  <div id="flowSvg"></div>
  <div id="flowDetail" style="margin-top:10px;color:#e6edf3;font-size:13px;min-height:44px"></div>
  <p style="color:#8b949e;font-size:12px">Formas lidas de <code>state_dict</code> (102 tensores nos dois checkpoints). Inspirado no Transformer Explainer, mas sem 3D e sem dados sintéticos.</p>
-</section>
+</section></details>
 <script>
 const FLOW={
  f10:{label:'F10 10M',d:320,heads:8,headDim:40,ff:1280,params:16.4,tok:'10000×320',pos:'512×320',q:'320×320',ffw:'1280×320 / 320×1280',head:'10000×320'},
