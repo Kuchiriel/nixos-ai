@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """fleet-endpoint-sweep.py — use every configured LLM endpoint overnight.
 
@@ -104,7 +105,7 @@ def spawn(provider_id: str, model: str, task: str, peer: str) -> dict | None:
     name = f"endpoint-{provider_id}"
     env = dict(os.environ, JARVIS_SPAWN_ALLOW_OVERRIDE="1")
     cmd = ["python3", "scripts/agent-spawn.py", "--task", task, "--name", name,
-           "--model", model, "--requester", "crouton-alpha"]
+           "--model", model, "--requester", os.environ.get("BUS_AGENT", __import__("subprocess").run(["agent-codename"], capture_output=True, text=True).stdout.strip() or "operator-unknown-general")]
     # (22/11, medido) o spawn interno permite 900s; 240s do wrapper rotulava
     # como "spawn timeout" sessoes que EXISTIAM e estavam trabalhando
     # (nvidia/cloudflare/openrouter medidos no /api/agents e /api/transcript).

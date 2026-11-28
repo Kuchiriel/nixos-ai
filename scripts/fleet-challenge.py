@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """Fleet capability: blind USDT-like challenge runner, scorer and status.
 
@@ -113,7 +114,7 @@ def spawn(persona: str, model: str | None = None) -> dict:
     proc = subprocess.Popen([
         "python3", "scripts/agent-spawn.py", "--task", task_for(persona),
         "--name", f"challenge-{persona}", "--model", model,
-        "--requester", "crouton-alpha",
+        "--requester", os.environ.get("BUS_AGENT", __import__("subprocess").run(["agent-codename"], capture_output=True, text=True).stdout.strip() or "operator-unknown-general"),
     ], cwd=str(REPO), env=env, stdout=subprocess.DEVNULL,
        stderr=subprocess.DEVNULL, start_new_session=True)
     marker = f"challenge-{persona}"
