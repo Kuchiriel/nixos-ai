@@ -11,7 +11,11 @@ Correcoes medidas em 28/11 (F133):
     ids com OUTRO remap de vocab dao loss ~9-13 (chute) e invalidam o gate;
   * o target y[:,-1] esta CORRETO (x=val[k:k+L], y=val[k+1:k+1+L], os
     logits da ultima posicao preveem val[k+L] = y[:,-1]);
-  * o batching do probe esta correto: module halting e ab dao o mesmo valor.
+  * o batching do probe esta correto: module halting e ab dao o mesmo valor;
+  * o indice do KL no sweep: o primeiro passo nao tem KL contra um passo
+    anterior. Deixar kl[:,0] = 0 fazia `(kl < eps).any(1)` ser True desde o
+    indice 0, e `argmax` devolvia 0 para TODO eps — sweep identico e gate
+    incapaz de escolher profundidade menor. Agora kl[:,0] = inf.
 """
 import argparse, json, math, time
 from pathlib import Path
@@ -80,6 +84,21 @@ def remap_fingerprint(corpus_path: str) -> str:
         return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16]
     except Exception:
         return ""
+
+
+def choose_exit_step(kl, eps):
+    """Primeiro passo t>=1 com KL < eps; fallback no ultimo passo.
+
+    `kl` tem shape [B, loops] e kl[:,0] deve ser +inf (o primeiro passo nao
+    tem KL contra um passo anterior). Devolve (exit_t, escolhidos_bool).
+    """
+    import torch
+    loops = kl.shape[1]
+    below = kl < eps
+    any_below = below.any(dim=1)
+    exit_t = below.float().argmax(dim=1)
+    exit_t = torch.where(any_below, exit_t, torch.full_like(exit_t, loops - 1))
+    return exit_t, any_below
 
 
 def main():
@@ -186,13 +205,12 @@ def main():
         for lgseq, yy in traces:
             lp = torch.log_softmax(lgseq, -1)
             p = lp.exp()
-            kl = torch.zeros(p.shape[0], p.shape[1])
+            kl = torch.full((p.shape[0], p.shape[1]), float("inf"))
             for t in range(1, p.shape[1]):
                 # lgseq e' [B, loops, tokens, vocab]: soma sobre vocab e
                 # media sobre posicoes -> [B] (um KL por amostra e por loop)
                 kl[:, t] = (p[:, t] * (lp[:, t] - lp[:, t-1])).sum(-1).mean(1)
-            exit_t = (kl < eps).float().argmax(1)
-            exit_t = torch.where((kl < eps).any(1), exit_t, torch.ones_like(exit_t) * (p.shape[1]-1))
+            exit_t, _ = choose_exit_step(kl, eps)
             chosen = lgseq[torch.arange(p.shape[0]), exit_t, -1, :]
             lpc = torch.log_softmax(chosen, -1)
             vl += float(-lpc.gather(1, yy[:, None]).sum())
